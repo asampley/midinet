@@ -72,6 +72,8 @@ class Net:
         # Make summary op and file
         tf.summary.scalar('accuracy', accuracy)
         tf.summary.scalar('error', error)
+        tf.summary.histogram('fc', self.fc)
+        tf.summary.histogram('outputs', self.outputs)
         tf.summary.histogram('outputs rounded', tf.round(self.outputs))
         tf.summary.histogram('labels', self.labels)
 
