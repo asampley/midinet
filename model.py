@@ -9,8 +9,8 @@ class Net:
         LEARNING_RATE = params['LEARNING_RATE']
         NUM_LAYERS    = params['NUM_LAYERS']
 
-        self.inputs = tf.placeholder(tf.float32, (None, None, NUM_NOTES))  # (time, batch, notes)
-        self.labels = tf.placeholder(tf.float32, (None, None, NUM_NOTES)) # (time, batch, notes)
+        self.inputs = tf.placeholder(tf.float32, (None, None, NUM_NOTES), 'Input')  # (time, batch, notes)
+        self.labels = tf.placeholder(tf.float32, (None, None, NUM_NOTES), 'Label') # (time, batch, notes)
         self._global_step = tf.Variable(0, name='global_step', trainable=False)
 
         ## Here cell can be any function you want, provided it has two attributes:
@@ -36,8 +36,9 @@ class Net:
         # to do for LSTM's tuple state, but can be achieved by creating two vector
         # Variables, which are then tiled along batch dimension and grouped into tuple.
         self.batch_size    = tf.shape(self.inputs)[1]
-        self.states = Net.get_state_variables(self.batch_size, self.cell)
-        #self.states = self.cell.zero_state(self.batch_size, tf.float32)
+        with tf.name_scope("State"):
+            self.states = Net.get_state_variables(self.batch_size, self.cell)
+            #self.states = self.cell.zero_state(self.batch_size, tf.float32)
 
         #print(self.states)
 
@@ -48,21 +49,31 @@ class Net:
 
         # fully connected layer from rnn to last output
         rnn_outputs_last_time = rnn_outputs[-1,:,:]
-        self.outputs = tf.contrib.layers.fully_connected(rnn_outputs_last_time, NUM_NOTES)
+        self.fc = tf.layers.dense(rnn_outputs_last_time, NUM_NOTES)
+        
+        # verify no nans or infs
+        self.fc = tf.verify_tensor_all_finite(self.fc, "WARNING: Some NAN and Inf in output")
+
+        # sigmoid function before losses
+        self.outputs = tf.sigmoid(self.fc)
 
         # compute elementwise L2 norm
-        error = tf.reduce_mean(tf.square(self.labels - self.outputs))
+        with tf.name_scope("Error"):
+            error = tf.reduce_mean(tf.square(self.labels - self.outputs))
 
         # optimize
         self.train_fn = tf.train.AdamOptimizer(learning_rate=LEARNING_RATE).minimize(error, global_step=self._global_step)
 
         # assuming that absolute difference between output and correct answer is 0.5
         # or less we can round it to the correct output.
-        accuracy = tf.reduce_mean(tf.cast(tf.abs(self.labels - self.outputs) < 0.5, tf.float32))
+        with tf.name_scope("Accuracy"):
+            accuracy = tf.reduce_mean(tf.abs(self.labels - tf.round(self.outputs)))
         
         # Make summary op and file
         tf.summary.scalar('accuracy', accuracy)
         tf.summary.scalar('error', error)
+        tf.summary.histogram('outputs rounded', tf.round(self.outputs))
+        tf.summary.histogram('labels', self.labels)
 
         self.summaries = tf.summary.merge_all()
         self.summaryFileWriter = tf.summary.FileWriter('model', self.session.graph)
@@ -127,8 +138,8 @@ class Net:
         state_variables = []
         for state_c, state_h in cell.zero_state(batch_size, tf.float32):
             state_variables.append(tf.contrib.rnn.LSTMStateTuple(
-                tf.placeholder_with_default(state_c, state_c.shape),
-                tf.placeholder_with_default(state_h, state_h.shape)))
+                tf.placeholder_with_default(state_c, state_c.shape, "State_C"),
+                tf.placeholder_with_default(state_h, state_h.shape, "State_H")))
                 #tf.Variable(state_c, trainable=False),
                 #tf.Variable(state_h, trainable=False)))
         # Return as a tuple, so that it can be fed to dynamic_rnn as an initial state
