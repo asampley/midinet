@@ -80,7 +80,7 @@ with tf.Session() as sess:
     params = {}
     params['NUM_NOTES']     = 128
     params['RNN_HIDDEN']    = 512
-    params['LEARNING_RATE'] = 0.01
+    params['LEARNING_RATE'] = 1e-4
     params['NUM_LAYERS']    = 2
 
     #estimator = tf.estimator.Estimator(model_fn=model.model_fn, model_dir='model', params=params)
@@ -101,7 +101,7 @@ with tf.Session() as sess:
     NUM_EPOCHS = 1000
     TRAIN_STEPS = 100
     BATCH_SIZE = 100
-    SONG_LENGTH = 100
+    SONG_LENGTH = 10
 
     def input_fn():
         x, y = generate_batch(data=data, time_steps=TIME_STEPS, batch_size=BATCH_SIZE)
@@ -124,7 +124,7 @@ with tf.Session() as sess:
 
         # make a song of length to test
         next_state = None
-        next_input = np.zeros((1, 1, 128), dtype=np.float32)
+        next_input = np.random.randint(2, size=(1, 1, 128)).astype(np.float32)
         song = np.zeros((SONG_LENGTH, 129), dtype=np.float32)
 
         for i in range(SONG_LENGTH):
@@ -140,7 +140,7 @@ with tf.Session() as sess:
             np.set_printoptions(threshold=np.inf)
             #print("IN:  " + str(next_input))
             #print("OUT: " + str(output))
-            print("IN:  " + str(np.where(next_input >= 0.5)[1]))
+            print("IN:  " + str(np.where(next_input >= 0.5)[2]))
             print("OUT: " + str(np.where(output >= 0.5)[1]))
 
             song[i,0] = 1
