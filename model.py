@@ -53,11 +53,13 @@ class Net:
         # fully connected layer from rnn to last output
         rnn_outputs_last_time = rnn_outputs[-1,:,:]
         with tf.name_scope("FC1"):
-            self.fc1 = tf.layers.dense(rnn_outputs_last_time, 4 * NUM_NOTES, activation=tf.nn.relu)
+            self.fc1 = tf.layers.dense(rnn_outputs_last_time, 4 * NUM_NOTES)
+            self.fc1 = tf.nn.leaky_relu(self.fc1, 0.2)
             self.fc1 = tf.layers.dropout(self.fc1, rate=self.keep_prob)
 
         with tf.name_scope("FC2"):
-            self.fc2 = tf.layers.dense(self.fc1, NUM_NOTES, activation=tf.nn.relu)
+            self.fc2 = tf.layers.dense(self.fc1, NUM_NOTES)
+            self.fc2 = tf.nn.leaky_relu(self.fc2, 0.2)
             self.fc2 = tf.layers.dropout(self.fc2, rate=self.keep_prob)
 
         # output layer
@@ -73,7 +75,7 @@ class Net:
         # assuming that absolute difference between output and correct answer is 0.5
         # or less we can round it to the correct output.
         with tf.name_scope("Accuracy"):
-            accuracy = 1 - tf.reduce_mean(tf.abs(self.labels - tf.round(self.outputs)))
+            accuracy = 1 - tf.reduce_mean(tf.abs(self.labels - tf.cast(self.outputs > 0.5, tf.float32)))
         
         # Make summary op and file
         tf.summary.scalar('accuracy', accuracy)
