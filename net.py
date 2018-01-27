@@ -79,9 +79,9 @@ with tf.Session() as sess:
 
     params = {}
     params['NUM_NOTES']     = 128
-    params['RNN_HIDDEN']    = 512
-    params['LEARNING_RATE'] = 1e-4
-    params['NUM_LAYERS']    = 2
+    params['RNN_HIDDEN']    = 128
+    params['LEARNING_RATE'] = 1e-5
+    params['NUM_LAYERS']    = 8
 
     #estimator = tf.estimator.Estimator(model_fn=model.model_fn, model_dir='model', params=params)
     net = model.Net(sess, params)
@@ -101,7 +101,7 @@ with tf.Session() as sess:
     NUM_EPOCHS = 1000
     TRAIN_STEPS = 100
     BATCH_SIZE = 100
-    SONG_LENGTH = 10
+    SONG_LENGTH = 640
 
     def input_fn():
         x, y = generate_batch(data=data, time_steps=TIME_STEPS, batch_size=BATCH_SIZE)
