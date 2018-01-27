@@ -57,7 +57,7 @@ class Net:
             self.fc1 = tf.layers.dropout(self.fc1, rate=self.keep_prob)
 
         with tf.name_scope("FC2"):
-            self.fc2 = tf.layers.dense(rnn_outputs_last_time, NUM_NOTES, activation=tf.nn.relu)
+            self.fc2 = tf.layers.dense(self.fc1, NUM_NOTES, activation=tf.nn.relu)
             self.fc2 = tf.layers.dropout(self.fc2, rate=self.keep_prob)
 
         # output layer
