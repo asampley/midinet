@@ -13,6 +13,9 @@ class Net:
         self.labels = tf.placeholder(tf.float32, (None, None, NUM_NOTES), 'Label') # (time, batch, notes)
         self._global_step = tf.Variable(0, name='global_step', trainable=False)
 
+        # Set variable for dropout of each layer
+        self.keep_prob = tf.placeholder(tf.float32, name='keep_prob')
+
         ## Here cell can be any function you want, provided it has two attributes:
         #     - cell.zero_state(batch_size, dtype)- tensor which is an initial value
         #                                           for state in __call__
@@ -28,7 +31,7 @@ class Net:
         cells = [None for _ in range(NUM_LAYERS)]
         for i in range(NUM_LAYERS):
             cells[i] = tf.nn.rnn_cell.BasicLSTMCell(RNN_HIDDEN, state_is_tuple=True)
-            cells[i] = tf.nn.rnn_cell.DropoutWrapper(cells[i], output_keep_prob=0.5)
+            cells[i] = tf.nn.rnn_cell.DropoutWrapper(cells[i], output_keep_prob=self.keep_prob)
         self.cell = tf.nn.rnn_cell.MultiRNNCell(cells, state_is_tuple=True)
 
         # Create initial state. Here it is just a constant tensor filled with zeros,
@@ -89,10 +92,11 @@ class Net:
     def restore(self):
         self.saver.restore(self.session, 'model/model.ckpt')
     
-    def train(self, batch_input, batch_labels, batch_state = None):
+    def train(self, batch_input, batch_labels, batch_state = None, keep_prob = 0.5):
         feed_dict = {
             self.inputs: batch_input,
-            self.labels: batch_labels
+            self.labels: batch_labels,
+            self.keep_prob: keep_prob
         }
         if batch_state is not None:
             feed_dict[self.states] = batch_state
@@ -108,6 +112,7 @@ class Net:
         
         feed_dict = {
             self.inputs: batch_input,
+            self.keep_prob: 1.0
         }
         if batch_state is not None:
             feed_dict[self.states] = batch_state
@@ -119,7 +124,8 @@ class Net:
     def summarize(self, batch_input, batch_labels, batch_state = None):
         feed_dict = {
             self.inputs: batch_input,
-            self.labels: batch_labels
+            self.labels: batch_labels,
+            self.keep_prob: 1.0
         }
         if batch_state is not None:
             feed_dict[self.states] = batch_state
