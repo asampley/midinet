@@ -67,7 +67,7 @@ class Net:
         # assuming that absolute difference between output and correct answer is 0.5
         # or less we can round it to the correct output.
         with tf.name_scope("Accuracy"):
-            accuracy = tf.reduce_mean(tf.abs(self.labels - tf.round(self.outputs)))
+            accuracy = 1 - tf.reduce_mean(tf.abs(self.labels - tf.round(self.outputs)))
         
         # Make summary op and file
         tf.summary.scalar('accuracy', accuracy)
