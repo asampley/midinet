@@ -30,7 +30,7 @@ class Net:
         #    https://gist.github.com/nivwusquorum/160d5cf7e1e82c21fad3ebf04f039317
         cells = [None for _ in range(NUM_LAYERS)]
         for i in range(NUM_LAYERS):
-            cells[i] = tf.nn.rnn_cell.BasicLSTMCell(RNN_HIDDEN, state_is_tuple=True)
+            cells[i] = tf.nn.rnn_cell.BasicLSTMCell(RNN_HIDDEN, state_is_tuple=True, activation=tf.nn.relu)
             cells[i] = tf.nn.rnn_cell.DropoutWrapper(cells[i], output_keep_prob=self.keep_prob)
         self.cell = tf.nn.rnn_cell.MultiRNNCell(cells, state_is_tuple=True)
 
@@ -52,13 +52,16 @@ class Net:
 
         # fully connected layer from rnn to last output
         rnn_outputs_last_time = rnn_outputs[-1,:,:]
-        self.fc = tf.layers.dense(rnn_outputs_last_time, NUM_NOTES)
-        
-        # verify no nans or infs
-        self.fc = tf.verify_tensor_all_finite(self.fc, "WARNING: Some NAN and Inf in output")
+        with tf.name_scope("FC1"):
+            self.fc1 = tf.layers.dense(rnn_outputs_last_time, 4 * NUM_NOTES, activation=tf.nn.relu)
+            self.fc1 = tf.layers.dropout(self.fc1, rate=self.keep_prob)
 
-        # sigmoid function before losses
-        self.outputs = tf.sigmoid(self.fc)
+        with tf.name_scope("FC2"):
+            self.fc2 = tf.layers.dense(rnn_outputs_last_time, NUM_NOTES, activation=tf.nn.relu)
+            self.fc2 = tf.layers.dropout(self.fc2, rate=self.keep_prob)
+
+        # output layer
+        self.outputs = self.fc2
 
         # compute elementwise L2 norm
         with tf.name_scope("Error"):
@@ -75,7 +78,7 @@ class Net:
         # Make summary op and file
         tf.summary.scalar('accuracy', accuracy)
         tf.summary.scalar('error', error)
-        tf.summary.histogram('fc', self.fc)
+        tf.summary.histogram('fc2', self.fc2)
         tf.summary.histogram('outputs', self.outputs)
         tf.summary.histogram('outputs rounded', tf.round(self.outputs))
         tf.summary.histogram('labels', self.labels)
