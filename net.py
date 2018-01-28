@@ -98,6 +98,7 @@ with tf.Session() as sess:
     ################################################################################
 
     TIME_STEPS = 100
+    LOSS_TIME_STEPS = 50
     NUM_EPOCHS = 1000
     TRAIN_STEPS = 100
     BATCH_SIZE = 200
@@ -112,11 +113,11 @@ with tf.Session() as sess:
         #eval_metrics = estimator.evaluate(input_fn=input_fn, steps=10)
         #print("Epoch %d: %s"%(epoch, eval_metrics))
         for ti in range(TRAIN_STEPS):
-            x, y = generate_batch(data=data, time_steps=TIME_STEPS, batch_size=BATCH_SIZE)
-            net.train(x, y)
+            x, _ = generate_batch(data=data, time_steps=TIME_STEPS, batch_size=BATCH_SIZE)
+            net.train(x, LOSS_TIME_STEPS)
 
             if ti % 10 == 0:
-                summaries = net.summarize(x, y)
+                summaries = net.summarize(x, LOSS_TIME_STEPS)
 
         # save net
         net.save()
@@ -141,7 +142,7 @@ with tf.Session() as sess:
             #print("IN:  " + str(next_input))
             #print("OUT: " + str(output))
             print("IN:  " + str(np.where(next_input >= 0.5)[2]))
-            print("OUT: " + str(np.where(output >= 0.5)[1]))
+            print("OUT: " + str(np.where(output >= 0.5)[2]))
 
             song[i,0] = 1
             song[i,1:] = output

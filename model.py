@@ -9,8 +9,15 @@ class Net:
         LEARNING_RATE = params['LEARNING_RATE']
         NUM_LAYERS    = params['NUM_LAYERS']
 
-        self.inputs = tf.placeholder(tf.float32, (None, None, NUM_NOTES), 'Input')  # (time, batch, notes)
-        self.labels = tf.placeholder(tf.float32, (None, None, NUM_NOTES), 'Label') # (time, batch, notes)
+        self.data = tf.placeholder(tf.float32, (None, None, NUM_NOTES), 'data')  # (time, batch, notes)
+        if self.data.shape[0] > 1:
+            self.inputs = self.data[:-1,:,:] # don't use last piece of data, to have the labels offset by one from input
+        else:
+            self.inputs = self.data # if only one time step, it's prediction, and we shouldn't reduce input
+            # TODO: make this more elegant
+        self.loss_time_steps = tf.placeholder(tf.int32, name='loss_time_steps')
+        self.labels = self.inputs[-self.loss_time_steps:, :, :]
+        #self.labels = tf.placeholder(tf.float32, (None, None, NUM_NOTES), 'Label') # (time, batch, notes)
         self._global_step = tf.Variable(0, name='global_step', trainable=False)
 
         # Set variable for dropout of each layer
@@ -51,14 +58,22 @@ class Net:
         rnn_outputs, self.state_out = tf.nn.dynamic_rnn(self.cell, self.inputs, initial_state=self.states, time_major=True)
 
         # fully connected layer from rnn to last output
-        rnn_outputs_last_time = rnn_outputs[-1,:,:]
+        rnn_outputs_last_times = rnn_outputs[-self.loss_time_steps:,:,:]
+        initializer = tf.contrib.layers.xavier_initializer()
+        fc1_size = 4 * NUM_NOTES
         with tf.name_scope("FC1"):
-            self.fc1 = tf.layers.dense(rnn_outputs_last_time, 4 * NUM_NOTES)
+            W1 = tf.Variable(initializer((RNN_HIDDEN, fc1_size)), name='W')
+            b1 = tf.Variable(initializer((fc1_size,)), name='b')
+            self.fc1 = tf.tensordot(rnn_outputs_last_times, W1, [[2],[0]]) + b1
+            #self.fc1 = tf.layers.dense(rnn_outputs_last_times, 4 * NUM_NOTES)
             self.fc1 = tf.nn.leaky_relu(self.fc1, 0.2)
             self.fc1 = tf.layers.dropout(self.fc1, rate=self.keep_prob)
 
         with tf.name_scope("FC2"):
-            self.fc2 = tf.layers.dense(self.fc1, NUM_NOTES)
+            W2 = tf.Variable(initializer((fc1_size, NUM_NOTES)), name='W')
+            b2 = tf.Variable(initializer((NUM_NOTES,)), name='b')
+            self.fc2 = tf.tensordot(self.fc1, W2, [[2],[0]]) + b2
+            #self.fc2 = tf.layers.dense(self.fc1, NUM_NOTES)
             self.fc2 = tf.nn.leaky_relu(self.fc2, 0.2)
             self.fc2 = tf.layers.dropout(self.fc2, rate=self.keep_prob)
 
@@ -97,10 +112,10 @@ class Net:
     def restore(self):
         self.saver.restore(self.session, 'model/model.ckpt')
     
-    def train(self, batch_input, batch_labels, batch_state = None, keep_prob = 0.5):
+    def train(self, batch_input, loss_time_steps, batch_state = None, keep_prob = 0.5):
         feed_dict = {
-            self.inputs: batch_input,
-            self.labels: batch_labels,
+            self.data: batch_input,
+            self.loss_time_steps: loss_time_steps,
             self.keep_prob: keep_prob
         }
         if batch_state is not None:
@@ -116,7 +131,8 @@ class Net:
         """
         
         feed_dict = {
-            self.inputs: batch_input,
+            self.data: batch_input,
+            self.loss_time_steps: 2,
             self.keep_prob: 1.0
         }
         if batch_state is not None:
@@ -126,10 +142,10 @@ class Net:
             [self.outputs, self.state_out],
             feed_dict=feed_dict)
 
-    def summarize(self, batch_input, batch_labels, batch_state = None):
+    def summarize(self, batch_input, loss_time_steps, batch_state = None):
         feed_dict = {
-            self.inputs: batch_input,
-            self.labels: batch_labels,
+            self.data: batch_input,
+            self.loss_time_steps: loss_time_steps,
             self.keep_prob: 1.0
         }
         if batch_state is not None:
