@@ -80,7 +80,7 @@ with tf.Session() as sess:
     params = {}
     params['NUM_NOTES']     = 128
     params['RNN_HIDDEN']    = 512
-    params['LEARNING_RATE'] = 1e-3
+    params['LEARNING_RATE'] = 1e-4
     params['NUM_LAYERS']    = 4
 
     #estimator = tf.estimator.Estimator(model_fn=model.model_fn, model_dir='model', params=params)
