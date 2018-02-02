@@ -183,9 +183,11 @@ class Net:
         # to enable updating its value.
         state_variables = []
         for state_c, state_h in cell.zero_state(batch_size, tf.float32):
+            state_init_c = tf.tile(tf.Variable(tf.zeros((1, state_c.shape[1]))), (batch_size, 1))
+            state_init_h = tf.tile(tf.Variable(tf.zeros((1, state_h.shape[1]))), (batch_size, 1))
             state_variables.append(tf.contrib.rnn.LSTMStateTuple(
-                tf.placeholder_with_default(state_c, state_c.shape, "State_C"),
-                tf.placeholder_with_default(state_h, state_h.shape, "State_H")))
+                tf.placeholder_with_default(state_init_c, state_c.shape, "State_C"),
+                tf.placeholder_with_default(state_init_h, state_h.shape, "State_H")))
                 #tf.Variable(state_c, trainable=False),
                 #tf.Variable(state_h, trainable=False)))
         # Return as a tuple, so that it can be fed to dynamic_rnn as an initial state

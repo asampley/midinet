@@ -85,8 +85,8 @@ with tf.Session() as sess:
     ##                           TRAINING LOOP                                    ##
     ################################################################################
 
-    TIME_STEPS = 100
-    LOSS_TIME_STEPS = 50
+    TIME_STEPS = 101
+    LOSS_TIME_STEPS = 100
     NUM_EPOCHS = 1000
     TRAIN_STEPS = 100
     BATCH_SIZE = 200
@@ -113,8 +113,7 @@ with tf.Session() as sess:
 
         # make a song of length to test
         next_state = None
-        next_notes = np.zeros((1, 1, 128), dtype=np.float32)
-        next_notes[0,0,81] = 1
+        next_notes = np.random.randint(0, 2, size=(1, 1, 128)).astype(np.float32)
         next_durations = np.zeros((1, 1, 8), dtype=np.float32)
         next_durations[0,0,6] = 1
         song = np.zeros((SONG_LENGTH, 129), dtype=np.float32)
@@ -129,20 +128,21 @@ with tf.Session() as sess:
             
             note, duration, next_state = net.predict(next_notes, next_durations, next_state)
 
+            song[i,0] = 2 ** np.argmax(duration)
+            song[i,1:] = note
+
             np.set_printoptions(threshold=np.inf)
             #print("IN:  " + str(next_input))
             #print("OUT: " + str(output))
-            print("IN:  " + str(np.where(next_notes >= 0.5)[2]))
-            print("OUT: " + str(np.where(note >= 0.5)[2]))
+            print("IN:  " + str(2 ** np.argmax(next_durations)) + ":" + str(np.where(next_notes >= 0.5)[2]))
+            print("OUT: " + str(song[i,0]) + ":" + str(np.where(note >= 0.5)[2]))
 
-            song[i,0] = 2 ** np.argmax(duration)
-            song[i,1:] = note
-            next_notes = np.reshape(note, (1,1,128))
+            next_notes = np.reshape(note, (1,1,128)).round()
             next_durations = np.reshape(duration, (1,1,8))
 
         # clamp song to 0 or 1 for volume of note
-        song[song < 0.5] = 0
-        song[song >= 0.5] = 1
+        song[:,1:][song[:,1:] < 0.5] = 0
+        song[:,1:][song[:,1:] >= 0.5] = 1
         
         # save the song
         midifile = postprocess(song)
