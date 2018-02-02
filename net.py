@@ -19,57 +19,45 @@ from preprocess import postprocess
 data = np.load('data/all.npy')
 
 def get_instance(data, time_steps):
-    start = np.random.randint(0, data.shape[0]) # we'll miss a bit of data at the end, but that's okay
+    start = np.random.randint(0, data.shape[0] - time_steps) # we'll miss a bit of data at the end, but that's okay
 
-    instance = np.zeros((time_steps, data.shape[1] - 1))
-    next_note = np.zeros((1, data.shape[1] - 1))
+    notes = np.zeros((time_steps, data.shape[1] - 1))
+    durations = np.zeros((time_steps, 8)) # (1/32 note, 1/16 note, ..., 4 whole notes)
+
     i = 0
-    i_instance = 0
-    while i_instance < instance.shape[0] and start + i < data.shape[0]:
-        repeats = int(min(data[start+i,0], time_steps - i_instance))
-        notes = data[start+i,1:].reshape((1,128))
-        instance[i_instance:i_instance+repeats,:] = np.repeat(notes, repeats, axis=0)
-        i_instance += repeats
-        i += 1
-
-    if start + i < data.shape[0]:
-        next_note = data[start+i,1:].reshape((1,128))
-
+    i_data = 0
+    remaining_duration = 0
+    while i < time_steps:
+        remaining_duration = int(data[start+i_data, 0])
+        
+        # reduce durations into intervals of at most 4 whole notes
+        i_duration = 7
+        while remaining_duration > 0 and i < time_steps:
+            if remaining_duration >= 2 ** i_duration:
+                notes[i,:] = data[start+i_data, 1:].reshape((1,128))
+                durations[i,i_duration] = 1
+                remaining_duration = remaining_duration - 2 ** i_duration
+            else:
+                i_duration = i_duration - 1
+            i = i + 1
+        i_data = i_data + 1
+            
 #    np.set_printoptions(threshold=np.inf)
-#    for i in range(instance.shape[0]):
-#        print(np.where(instance[i,:] != 0)[0])
+#    for i in range(notes.shape[0]):
+#        print(np.where(notes[i,:] != 0)[0])
 
-    return instance, next_note
+    return notes, durations
 
 def generate_batch(data, time_steps, batch_size):
-    """Generates instance of a problem.
-    Returns
-    -------
-    x: np.array
-        two numbers to be added represented by bits.
-        shape: b, i, n
-        where:
-            b is bit index from the end
-            i is example idx in batch
-            n is one of [0,1] depending for first and
-                second summand respectively
-    y: np.array
-        the result of the addition
-        shape: b, i, n
-        where:
-            b is bit index from the end
-            i is example idx in batch
-            n is always 0
-    """
     num_notes = data.shape[1] - 1
-    x = np.empty((time_steps, batch_size, num_notes))
-    y = np.empty((1,          batch_size, num_notes))
+    notes     = np.empty((time_steps, batch_size, num_notes))
+    durations = np.empty((time_steps, batch_size, 8        ))
 
     for i in range(batch_size):
-        notes, next_note = get_instance(data, time_steps)
-        x[:, i, :] = notes
-        y[:, i, :] = next_note
-    return x, y
+        notes_i, durations_i = get_instance(data, time_steps)
+        notes[:, i, :] = notes_i
+        durations[:, i, :] = durations_i
+    return notes, durations
 
 
 with tf.Session() as sess:
@@ -79,9 +67,9 @@ with tf.Session() as sess:
 
     params = {}
     params['NUM_NOTES']     = 128
-    params['RNN_HIDDEN']    = 512
+    params['RNN_HIDDEN']    = 256
     params['LEARNING_RATE'] = 1e-4
-    params['NUM_LAYERS']    = 4
+    params['NUM_LAYERS']    = 2
 
     #estimator = tf.estimator.Estimator(model_fn=model.model_fn, model_dir='model', params=params)
     net = model.Net(sess, params)
@@ -113,11 +101,11 @@ with tf.Session() as sess:
         #eval_metrics = estimator.evaluate(input_fn=input_fn, steps=10)
         #print("Epoch %d: %s"%(epoch, eval_metrics))
         for ti in range(TRAIN_STEPS):
-            x, _ = generate_batch(data=data, time_steps=TIME_STEPS, batch_size=BATCH_SIZE)
-            net.train(x, LOSS_TIME_STEPS)
+            notes, durations = generate_batch(data=data, time_steps=TIME_STEPS, batch_size=BATCH_SIZE)
+            net.train(notes, durations, LOSS_TIME_STEPS)
 
             if ti % 10 == 0:
-                summaries = net.summarize(x, LOSS_TIME_STEPS)
+                summaries = net.summarize(notes, durations, LOSS_TIME_STEPS)
 
         # save net
         net.save()
@@ -125,7 +113,10 @@ with tf.Session() as sess:
 
         # make a song of length to test
         next_state = None
-        next_input = np.random.randint(2, size=(1, 1, 128)).astype(np.float32)
+        next_notes = np.zeros((1, 1, 128), dtype=np.float32)
+        next_notes[0,0,81] = 1
+        next_durations = np.zeros((1, 1, 8), dtype=np.float32)
+        next_durations[0,0,6] = 1
         song = np.zeros((SONG_LENGTH, 129), dtype=np.float32)
 
         for i in range(SONG_LENGTH):
@@ -136,17 +127,18 @@ with tf.Session() as sess:
             #next_input_gen = estimator.predict(predict_input_fn)
             #output = next(next_input_gen)
             
-            output, next_state = net.predict(next_input, next_state)
+            note, duration, next_state = net.predict(next_notes, next_durations, next_state)
 
             np.set_printoptions(threshold=np.inf)
             #print("IN:  " + str(next_input))
             #print("OUT: " + str(output))
-            print("IN:  " + str(np.where(next_input >= 0.5)[2]))
-            print("OUT: " + str(np.where(output >= 0.5)[2]))
+            print("IN:  " + str(np.where(next_notes >= 0.5)[2]))
+            print("OUT: " + str(np.where(note >= 0.5)[2]))
 
-            song[i,0] = 1
-            song[i,1:] = output
-            next_input = np.reshape(output, (1,1,128))
+            song[i,0] = 2 ** np.argmax(duration)
+            song[i,1:] = note
+            next_notes = np.reshape(note, (1,1,128))
+            next_durations = np.reshape(duration, (1,1,8))
 
         # clamp song to 0 or 1 for volume of note
         song[song < 0.5] = 0
