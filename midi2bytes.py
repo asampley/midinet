@@ -2,6 +2,9 @@ import mido
 import numpy as np
 
 def midi2bytes(filename, min_note_denom=32):
+    PITCHES = 12 # const for number of pitches in octave
+    OCTAVES = 10 # const for number of octavies in midi
+
     midifile = mido.MidiFile(filename)
 
     if min_note_denom % 4 != 0:
@@ -26,34 +29,36 @@ def midi2bytes(filename, min_note_denom=32):
     times //= delta_step
     times = np.unique(times)
 
-    b = np.zeros((times.size, 128), dtype=np.int8)
+    b = np.zeros((times.size, PITCHES, OCTAVES), dtype=np.int8)
 
     # put in the notes
     for track in midifile.tracks:
         t = 0
         t_prev = 0
-        notes = np.zeros(128, dtype=np.int8)
+        notes = np.zeros((PITCHES, OCTAVES), dtype=np.int8)
         for msg in track:
             t += msg.time
             
             # write notes as soon as the time changes
             if t_prev != t:
                 t_prev = t
-                b[ti,:] = np.maximum(notes, b[ti,:])
+                b[ti,:,:] = np.maximum(notes, b[ti,:,:])
 
             ti = np.where(times == t // delta_step)[0]
             if (msg.type == 'note_on' and msg.velocity == 0) or msg.type == 'note_off':
-                notes[msg.note] = 0
+                notes[msg.note % PITCHES, msg.note // PITCHES] = 0
             elif msg.type == 'note_on':
-                notes[msg.note] = 127
-                #notes[msg.note] = msg.velocity
+                notes[msg.note % PITCHES, msg.note // PITCHES] = 127
 
         # write notes at the end of the track
-        b[ti,:] = np.maximum(notes, b[ti,:])
+        b[ti,:,:] = np.maximum(notes, b[ti,:,:])
 
     return times, b
 
 def bytes2midi(times, b, min_note_denom=32):
+    PITCHES = 12 # const for number of pitches in octave
+    OCTAVES = 10 # const for number of octavies in midi
+
     midifile = mido.MidiFile()
     midifile.add_track()
 
@@ -77,24 +82,27 @@ def bytes2midi(times, b, min_note_denom=32):
     # put in the notes
     for i in range(times.size):
         if i > 0:
-            notesDiff = np.where(b[i,:] != b[i-1,:])[0]
+            notesDiff = np.where(b[i,:,:] != b[i-1,:,:])
         else:
-            notesDiff = np.where(b[i,:] != 0)[0]
+            notesDiff = np.where(b[i,:,:] != 0)
         if i > 0:
             dtime = times[i] - times[i-1]
         else:
             dtime = times[i]
         
-        numNotes = notesDiff.size
         numNote = 0
         
-        if notesDiff.size == 0:
+        if notesDiff[0].size == 0:
             missedTime += dtime
         else:
-            for k in notesDiff.flat:
+            for j in range(0,notesDiff[0].size):
+                pitch = notesDiff[0][j]
+                octave = notesDiff[1][j]
+                note = PITCHES * octave + pitch
+
                 time = dtime + missedTime if numNote == 0 else 0
-                vel = b[i,k]
-                msg = mido.Message('note_on', note=k, time=time, velocity=vel)
+                vel = b[i,notesDiff[0][j],notesDiff[1][j]]
+                msg = mido.Message('note_on', note=note, time=time, velocity=vel)
                 midifile.tracks[0].append(msg)
                 numNote += 1 
             missedTime = 0

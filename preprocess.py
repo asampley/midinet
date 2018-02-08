@@ -18,25 +18,20 @@ def preprocess(f):
     notes.astype(np.float32, copy=False)
     notes = notes / 127
 
-    # calculate repetitions of notes
-    rep = np.zeros((t.size, 1))
-    rep[0,0] = t[0]
-    rep[1:,0] = np.diff(t)
+    # calculate repetitions of notes rather than timestamps
+    rep = np.zeros((t.size,))
+    rep[0] = t[0]
+    rep[1:] = np.diff(t)
 
-    # append time steps to data
-    data = np.hstack((rep, notes))
+    return rep, notes
 
-    return data
-
-def postprocess(data):
-    rep, notes = np.split(data, [1], axis=1)
-
+def postprocess(rep, notes):
     # turn notes into integers from 0 to 127
     notes = notes * 127
     notes = notes.astype(np.int8, copy=False)
 
     # turn repetitions into times
-    t = np.zeros((rep.size), np.int64)
+    t = np.zeros((rep.size,), np.int64)
     t[0] = rep[0]
     for i in range(1, t.size):
         t[i] = t[i-1] + rep[i]
@@ -44,21 +39,29 @@ def postprocess(data):
     return bytes2midi(t, notes)
 
 if __name__ == '__main__':
-    data = np.zeros((0, 129), dtype=np.float32)
-    for f in args.files:
-        datai = preprocess(f)
-        pad = np.zeros((1, 129), dtype=np.float32)
-        pad[0,0] = args.waittime
-
-        data = np.vstack((data, pad, datai))
+    PITCHES = 12 # pitches in an octave
+    OCTAVES = 10 # octaves in midi
+    notes = np.zeros((0, PITCHES, OCTAVES), dtype=np.float32)
+    reps  = np.zeros((0,), dtype=np.float32)
     
+    # create padding between songs
+    pad = np.zeros((1, PITCHES, OCTAVES), dtype=np.float32)
+    padreps = np.array((args.waittime,))
+    for f in args.files:
+        repsi, notesi = preprocess(f)
+
+        reps = np.concatenate((reps, padreps, repsi), axis=0)
+        notes = np.concatenate((notes, pad, notesi), axis=0)
+    
+    assert(reps.shape[0] == notes.shape[0], "Programming error, repetitions and notes do not have the same number of elements")
+
     print("Created data with")
     print("\t%s songs"%(len(args.files)))
-    print("\t%s timesteps"%(data.shape[0]))
-    print("\t%s 32nd notes"%(np.sum(data[:,0])))
+    print("\t%s timesteps"%(reps.shape[0]))
+    print("\t%s 32nd notes"%(np.sum(reps[:])))
 
     if args.midi:
-        mfile = postprocess(data)
+        mfile = postprocess(reps, notes)
         mfile.save(args.outputfile)
     else:
-        np.save(args.outputfile, data)
+        np.savez(args.outputfile, reps=reps, notes=notes)

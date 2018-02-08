@@ -4,94 +4,135 @@ class Net:
     def __init__(self, session, params):
         self.session = session
 
-        NUM_NOTES     = params['NUM_NOTES']
-        RNN_HIDDEN    = params['RNN_HIDDEN']
-        LEARNING_RATE = params['LEARNING_RATE']
-        NUM_LAYERS    = params['NUM_LAYERS']
+        PITCHES = 12 # pitches in an octave
+        OCTAVES = 10 # octaves in a midi file
 
-        self.notes = tf.placeholder(tf.float32, (None, None, NUM_NOTES), 'notes')  # (time, batch, notes)
-        self.durations = tf.placeholder(tf.float32, (None, None, 8), 'durations')  # (time, batch, duration_categories)
+        initializer = tf.contrib.layers.xavier_initializer() # initializer for fc layers
 
-        self.notes_in = tf.cond(tf.shape(self.notes)[0] > 1, lambda: self.notes[:-1,:,:], lambda: self.notes)
-        self.durations_in = tf.cond(tf.shape(self.durations)[0] > 1, lambda: self.durations[:-1,:,:], lambda: self.durations)
-            # don't use last piece of data, to have the labels offset by one from input
-            # if only one time step, it's prediction, and we shouldn't reduce input
-            # TODO: make this more elegant
+        #RNN_HIDDEN           = params['RNN_HIDDEN']
+        RNN_NOTES_CHANNELS    = params['RNN_NOTES_CHANNELS']
+        RNN_DURATION_CHANNELS = params['RNN_DURATION_CHANNELS']
+        LEARNING_RATE         = params['LEARNING_RATE']
+
+        self.notes = tf.placeholder(tf.float32, (None, None, PITCHES, OCTAVES), 'notes')  # (time, batch, pitch, octave)
+        self.durations = tf.placeholder(tf.float32, (None, None, 8), 'durations')  # (time, batch, duration_category)
+
+        # cut off last note as input, since we have no corresponding output
+        # in the case of a single input, don't cut, because we're doing prediction (training makes no sense without an output)
+        # TODO: make this more elegant
+        with tf.name_scope("trim_inputs"):
+            self.notes_in = tf.cond(tf.shape(self.notes)[0] > 1, lambda: self.notes[:-1,:,:,:], lambda: self.notes)
+            self.durations_in = tf.cond(tf.shape(self.durations)[0] > 1, lambda: self.durations[:-1,:,:], lambda: self.durations)
+        
+        # variable to specify how many time steps to use for training each iteration
         self.loss_time_steps = tf.placeholder(tf.int32, name='loss_time_steps')
 
-        self.notes_labels = self.notes_in[-self.loss_time_steps:, :, :]
-        self.durations_labels = self.durations_in[-self.loss_time_steps:, :, :]
+        # slice off training outputs
+        with tf.name_scope("trim_labels"):
+            self.notes_labels = self.notes_in[-self.loss_time_steps:, :, :, :]
+            self.durations_labels = self.durations_in[-self.loss_time_steps:, :, :]
 
+        # global step counter
         self._global_step = tf.Variable(0, name='global_step', trainable=False)
 
         # Set variable for dropout of each layer
         self.keep_prob = tf.placeholder(tf.float32, name='keep_prob')
 
-        ## Here cell can be any function you want, provided it has two attributes:
-        #     - cell.zero_state(batch_size, dtype)- tensor which is an initial value
-        #                                           for state in __call__
-        #     - cell.__call__(input, state) - function that given input and previous
-        #                                     state returns tuple (output, state) where
-        #                                     state is the state passed to the next
-        #                                     timestep and output is the tensor used
-        #                                     for infering the output at timestep. For
-        #                                     example for LSTM, output is just hidden,
-        #                                     but state is memory + hidden
-        # Example LSTM cell with learnable zero_state can be found here:
-        #    https://gist.github.com/nivwusquorum/160d5cf7e1e82c21fad3ebf04f039317
-        cells = [None for _ in range(NUM_LAYERS)]
-        for i in range(NUM_LAYERS):
-            cells[i] = tf.nn.rnn_cell.BasicLSTMCell(RNN_HIDDEN, state_is_tuple=True, activation=tf.nn.relu)
-            cells[i] = tf.nn.rnn_cell.DropoutWrapper(cells[i], output_keep_prob=self.keep_prob)
-        self.cell = tf.nn.rnn_cell.MultiRNNCell(cells, state_is_tuple=True)
+        with tf.name_scope("time_steps"):
+            self.times_in   = tf.shape(self.notes_in)[0]
+        with tf.name_scope("batch_size"):
+            self.batch_size = tf.shape(self.notes_in)[1]
 
-        # Create initial state. Here it is just a constant tensor filled with zeros,
-        # but in principle it could be a learnable parameter. This is a bit tricky
-        # to do for LSTM's tuple state, but can be achieved by creating two vector
-        # Variables, which are then tiled along batch dimension and grouped into tuple.
-        self.batch_size    = tf.shape(self.notes_in)[1]
-        with tf.name_scope("State"):
-            self.states = Net.get_state_variables(self.batch_size, self.cell)
-            #self.states = self.cell.zero_state(self.batch_size, tf.float32)
+        ## Make one rnn for each octave
+        ## Given inputs (time, batch, pitch) outputs a tuple
+        ##  - outputs: (time, batch, RNN_HIDDEN)
+        ##  - states:  (time, batch, hidden_size)
+        #rnn_octave_output = []
+        #self.rnn_octave_state = ()
+        #with tf.name_scope("Octave_RNNs") as scope:
+        #    cell = self.cell(NUM_LAYERS, RNN_HIDDEN, self.keep_prob)
+        #    # create trainable initial state
+        #    with tf.name_scope("State"):
+        #        states = Net.get_state_variables(self.batch_size, cell)
+        #    for i in range(0, OCTAVES):
+        #        # create rnn
+        #        output, state = tf.nn.dynamic_rnn(cell, self.notes_in[:,:,:,i], initial_state=states, time_major=True, scope=scope)
+        #        rnn_octave_output.append(output)
+        #        self.rnn_octave_state = self.rnn_octave_state + state
+        #    # stack outputs of rnns to be (time, batch, RNN_HIDDEN, octave)
+        #    rnn_octave_output = tf.stack(rnn_octave_output, axis=3)
+        #
+        ## make fc to map rnn output to (time, batch, octave, pitch)
+        #with tf.name_scope("FC_RNN_1"):
+        #    W = tf.Variable(initializer((RNN_HIDDEN, PITCHES)), name='W')
+        #    b = tf.Variable(initializer((PITCHES,)), name='b')
+        #    self.fcr1 = tf.tensordot(rnn_octave_output, W, [[2],[0]]) + b
+        #    self.fcr1 = tf.nn.leaky_relu(self.fcr1, 0.2)
+        #    self.fcr1 = tf.layers.dropout(self.fcr1, rate=self.keep_prob)
+        #
+        ## Make one rnn for each pitch
+        ## Given inputs (time, batch, octave) outputs a tuple
+        ##  - outputs: (time, batch, RNN_HIDDEN)
+        ##  - states:  (time, batch, hidden_size)
+        #rnn_pitch_output = []
+        #self.rnn_pitch_state = ()
+        #with tf.name_scope("Pitch_RNNs") as scope:
+        #    cell = self.cell(NUM_LAYERS, RNN_HIDDEN, self.keep_prob)
+        #    # create trainable initial state
+        #    with tf.name_scope("State"):
+        #        states = Net.get_state_variables(self.batch_size, cell)
+        #    for i in range(0, PITCHES):
+        #        # create rnn
+        #        output, state = tf.nn.dynamic_rnn(cell, self.fcr1[:,:,:,i], initial_state=states, time_major=True, scope=scope)
+        #        rnn_pitch_output.append(output)
+        #        self.rnn_pitch_state = self.rnn_pitch_state + state
+        #    # stack outputs of rnns to be (time, batch, RNN_HIDDEN, pitch)
+        #    rnn_pitch_output = tf.stack(rnn_pitch_output, axis=3)
+        #
+        #self.rnn_state = self.rnn_octave_state + self.rnn_pitch_state
+        #
+        ## make fc to map rnn output to (time, batch, pitch, octave)
+        #with tf.name_scope("FC_RNN_2"):
+        #    W = tf.Variable(initializer((RNN_HIDDEN, OCTAVES)), name='W')
+        #    b = tf.Variable(initializer((OCTAVES,)), name='b')
+        #    self.fcr2 = tf.tensordot(rnn_pitch_output, W, [[2],[0]]) + b
+        #    self.fcr2 = tf.nn.leaky_relu(self.fcr2, 0.2)
+        #    self.fcr2 = tf.layers.dropout(self.fcr2, rate=self.keep_prob)
+        # 
+        #rnn_output = self.fcr2
 
-        #print(self.states)
+        # create convolutional rnn with notes as input (time, batch, pitch, octave)
+        # output (time, batch, pitch, octave)
+        with tf.name_scope("rnn_notes") as scope:
+            cells = [None] * (len(RNN_NOTES_CHANNELS) + 1)
+            cells[0] = Net.conv_cell(2, [PITCHES, OCTAVES, 1], RNN_NOTES_CHANNELS[0], [5,5], self.keep_prob)
+            for i in range(1, len(RNN_NOTES_CHANNELS)):
+                cells[i] = Net.conv_cell(2, [PITCHES, OCTAVES, RNN_NOTES_CHANNELS[i-1]], RNN_NOTES_CHANNELS[i], [5,5], self.keep_prob)
+            cells[-1] = Net.conv_cell(2, [PITCHES, OCTAVES, RNN_NOTES_CHANNELS[-1]], 1, [5,5], self.keep_prob)
+            cell = tf.nn.rnn_cell.MultiRNNCell(cells, state_is_tuple=True)
+            with tf.name_scope("state"):
+                states = Net.get_state_variables(self.batch_size, cell)
+            rnn_notes_output, rnn_notes_state = tf.nn.dynamic_rnn(cell, tf.expand_dims(self.notes_in, -1), initial_state=states, time_major=True, scope=scope)
+            rnn_notes_output = tf.squeeze(rnn_notes_output, -1)
 
-        # Given inputs (time, batch, num_notes) outputs a tuple
-        #  - outputs: (time, batch, num_notes)
-        #  - states:  (time, batch, hidden_size)
-        rnn_outputs, self.state_out = tf.nn.dynamic_rnn(self.cell, self.notes_in, initial_state=self.states, time_major=True)
+        # create rnn with durations as input (time, batch, duration)
+        # output (time, batch, duration)
+        with tf.name_scope("rnn_duration") as scope:
+            cell = Net.cell(RNN_DURATION_CHANNELS + [8], self.keep_prob)
+            with tf.name_scope("state"):
+                states = Net.get_state_variables(self.batch_size, cell)
+            rnn_duration_output, rnn_duration_state = tf.nn.dynamic_rnn(cell, self.durations_in, initial_state=states, time_major=True, scope=scope)
 
-        rnn_outputs_last_times = rnn_outputs[-self.loss_time_steps:,:,:]
-        initializer = tf.contrib.layers.xavier_initializer()
-        fc1_size = 4 * NUM_NOTES
-        
-        # fully connected layer from rnn to note output
-        with tf.name_scope("FC_Notes_1"):
-            W1 = tf.Variable(initializer((RNN_HIDDEN, fc1_size)), name='W')
-            b1 = tf.Variable(initializer((fc1_size,)), name='b')
-            self.fc1 = tf.tensordot(rnn_outputs_last_times, W1, [[2],[0]]) + b1
-            self.fc1 = tf.nn.leaky_relu(self.fc1, 0.2)
-            self.fc1 = tf.layers.dropout(self.fc1, rate=self.keep_prob)
-
-        with tf.name_scope("FC_Notes_2"):
-            W2 = tf.Variable(initializer((fc1_size, NUM_NOTES)), name='W')
-            b2 = tf.Variable(initializer((NUM_NOTES,)), name='b')
-            self.fc2 = tf.tensordot(self.fc1, W2, [[2],[0]]) + b2
-            self.fc2 = tf.nn.leaky_relu(self.fc2, 0.2)
-        
-        # fully connected layer from rnn to duration output
-        with tf.name_scope("FC_Duration_1"):
-            W1 = tf.Variable(initializer((RNN_HIDDEN, 8)), name='W')
-            b1 = tf.Variable(initializer((8,)), name='b')
-            self.fcd1 = tf.tensordot(rnn_outputs_last_times, W1, [[2],[0]]) + b1
-            self.fcd1 = tf.nn.softmax(self.fcd1, name='Softmax')
+        # create tuple of rnn states
+        self.rnn_state = rnn_notes_state + rnn_duration_state
 
         # outputs
-        self.note_out = self.fc2
-        self.duration_out = self.fcd1
+        with tf.name_scope("output_loss_time_steps"):
+            self.note_out = rnn_notes_output[-self.loss_time_steps:,:,:,:]
+            self.duration_out = rnn_duration_output[-self.loss_time_steps:,:,:]
 
         # compute elementwise L2 norm
-        with tf.name_scope("Error"):
+        with tf.name_scope("error"):
             error = tf.reduce_mean(tf.square(self.notes_labels - self.note_out)) + tf.reduce_mean(tf.square(self.durations_labels - self.duration_out))
 
         # optimize
@@ -99,9 +140,9 @@ class Net:
 
         # assuming that absolute difference between output and correct answer is 0.5
         # or less we can round it to the correct output.
-        with tf.name_scope("Note_Accuracy"):
+        with tf.name_scope("note_accuracy"):
             accuracy = 1 - tf.reduce_mean(tf.abs(self.notes_labels - tf.cast(self.note_out > 0.5, tf.float32)))
-        with tf.name_scope("Duration_Accuracy"):
+        with tf.name_scope("duration_accuracy"):
             duration_accuracy = tf.reduce_mean(tf.cast(tf.equal(tf.argmax(self.duration_out, axis=2),tf.argmax(self.durations_labels, axis=2)), tf.float32))
         
         # Make summary op and file
@@ -120,6 +161,21 @@ class Net:
         # Make net saver
         self.saver = tf.train.Saver()
 
+    @staticmethod
+    def cell(num_hidden, keep_prob, activation=tf.nn.relu):
+        # create cell definition
+        cells = [None] * len(num_hidden)
+        for i in range(len(num_hidden)):
+            cells[i] = tf.nn.rnn_cell.BasicLSTMCell(num_hidden[i], state_is_tuple=True, activation=activation)
+            cells[i] = tf.nn.rnn_cell.DropoutWrapper(cells[i], output_keep_prob=keep_prob)
+        return tf.nn.rnn_cell.MultiRNNCell(cells, state_is_tuple=True)
+
+    @staticmethod
+    def conv_cell(conv_ndims, input_shape, output_channels, kernel_shape, keep_prob):
+        return tf.nn.rnn_cell.DropoutWrapper(
+                tf.contrib.rnn.ConvLSTMCell(conv_ndims, input_shape, output_channels, kernel_shape),
+                output_keep_prob=keep_prob)
+
     def save(self):
         self.saver.save(self.session, 'model/model.ckpt')
 
@@ -134,10 +190,10 @@ class Net:
             self.keep_prob: keep_prob
         }
         if batch_state is not None:
-            feed_dict[self.states] = batch_state
+            feed_dict[self.rnn_state] = batch_state
 
         return self.session.run(
-            [self.train_fn, self.state_out],
+            [self.train_fn, self.rnn_state],
             feed_dict=feed_dict)
 
     def predict(self, note_input, dur_input, batch_state = None):
@@ -152,10 +208,10 @@ class Net:
             self.keep_prob: 1.0
         }
         if batch_state is not None:
-            feed_dict[self.states] = batch_state
+            feed_dict[self.rnn_state] = batch_state
 
         return self.session.run(
-            [self.note_out, self.duration_out, self.state_out],
+            [self.note_out, self.duration_out, self.rnn_state],
             feed_dict=feed_dict)
 
     def summarize(self, note_input, dur_input, loss_time_steps, batch_state = None):
@@ -183,8 +239,9 @@ class Net:
         # to enable updating its value.
         state_variables = []
         for state_c, state_h in cell.zero_state(batch_size, tf.float32):
-            state_init_c = tf.tile(tf.Variable(tf.zeros((1, state_c.shape[1]))), (batch_size, 1))
-            state_init_h = tf.tile(tf.Variable(tf.zeros((1, state_h.shape[1]))), (batch_size, 1))
+            # make trainable initial variable which DOES NOT include batch size, but tile so that each batch gets it
+            state_init_c = tf.tile(tf.Variable(tf.zeros([1] + state_c.shape[1:].as_list())), [batch_size] + (state_c.shape.ndims - 1) * [1])
+            state_init_h = tf.tile(tf.Variable(tf.zeros([1] + state_h.shape[1:].as_list())), [batch_size] + (state_h.shape.ndims - 1) * [1])
             state_variables.append(tf.contrib.rnn.LSTMStateTuple(
                 tf.placeholder_with_default(state_init_c, state_c.shape, "State_C"),
                 tf.placeholder_with_default(state_init_h, state_h.shape, "State_H")))
