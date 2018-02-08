@@ -5,7 +5,7 @@ class Net:
         self.session = session
 
         PITCHES = 12  # pitches in an octave
-        OCTAVES = 10  # octaves in a midi file
+        OCTAVES = 11  # octaves in a midi file
         DURATIONS = 8 # number of categories of duration
 
         initializer = tf.contrib.layers.xavier_initializer() # initializer for fc layers

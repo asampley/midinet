@@ -40,7 +40,7 @@ def postprocess(rep, notes):
 
 if __name__ == '__main__':
     PITCHES = 12 # pitches in an octave
-    OCTAVES = 10 # octaves in midi
+    OCTAVES = 11 # octaves in midi
     notes = np.zeros((0, PITCHES, OCTAVES), dtype=np.float32)
     reps  = np.zeros((0,), dtype=np.float32)
     

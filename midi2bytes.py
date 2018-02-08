@@ -3,7 +3,7 @@ import numpy as np
 
 def midi2bytes(filename, min_note_denom=32):
     PITCHES = 12 # const for number of pitches in octave
-    OCTAVES = 10 # const for number of octavies in midi
+    OCTAVES = 11 # const for number of octavies in midi
 
     midifile = mido.MidiFile(filename)
 
@@ -57,7 +57,7 @@ def midi2bytes(filename, min_note_denom=32):
 
 def bytes2midi(times, b, min_note_denom=32):
     PITCHES = 12 # const for number of pitches in octave
-    OCTAVES = 10 # const for number of octavies in midi
+    OCTAVES = 11 # const for number of octavies in midi
 
     midifile = mido.MidiFile()
     midifile.add_track()

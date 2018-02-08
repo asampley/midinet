@@ -11,11 +11,15 @@ data = np.load('data/all.npz')
 reps = data['reps']
 notes = data['notes']
 
+PITCHES = 12 # pitches in music
+OCTAVES = 11 # octaves in midi
+DURATIONS = 8 # number of allowed durations
+
 def get_instance(reps, notes, time_steps):
     start = np.random.randint(0, reps.shape[0] - time_steps) # we'll miss a bit of data at the end, but that's okay
 
     notes_instance = np.zeros((time_steps, notes.shape[1], notes.shape[2]))
-    durations = np.zeros((time_steps, 8)) # (1/32 note, 1/16 note, ..., 4 whole notes)
+    durations = np.zeros((time_steps, DURATIONS)) # (1/32 note, 1/16 note, ..., 4 whole notes)
 
     i = 0
     i_data = 0
@@ -42,8 +46,8 @@ def get_instance(reps, notes, time_steps):
     return notes_instance, durations
 
 def generate_batch(reps, notes, time_steps, batch_size):
-    notes_batch = np.empty((time_steps, batch_size, notes.shape[1], notes.shape[2]))
-    durations   = np.empty((time_steps, batch_size, 8        ))
+    notes_batch = np.empty((time_steps, batch_size, PITCHES, OCTAVES))
+    durations   = np.empty((time_steps, batch_size, DURATIONS))
 
     for i in range(batch_size):
         notes_i, durations_i = get_instance(reps, notes, time_steps)
@@ -104,11 +108,11 @@ with tf.Session() as sess:
 
         # make a song of length to test
         next_state = None
-        next_notes = np.random.randint(0, 2, size=(1, 1, 12, 10)).astype(np.float32)
-        next_durations = np.zeros((1, 1, 8), dtype=np.float32)
+        next_notes = np.random.randint(0, 2, size=(1, 1, PITCHES, OCTAVES)).astype(np.float32)
+        next_durations = np.zeros((1, 1, DURATIONS), dtype=np.float32)
         next_durations[0,0,6] = 1
         song_reps = np.zeros((SONG_LENGTH,), dtype=np.float32)
-        song = np.zeros((SONG_LENGTH, 12, 10), dtype=np.float32)
+        song = np.zeros((SONG_LENGTH, PITCHES, OCTAVES), dtype=np.float32)
 
         for i in range(SONG_LENGTH):
             #predict_input_fn = tf.estimator.inputs.numpy_input_fn(
@@ -122,16 +126,15 @@ with tf.Session() as sess:
 
             note_out, duration_out, next_state = net.predict(next_notes, next_durations, next_state)
 
-            print(duration_out[0,0,:])
             duration_i = np.random.choice(8, p=duration_out[0,0,:])
             song_reps[i] = 2 ** duration_i
             # randomly select notes based on outputs as probability
             song[i,:,:] = np.random.random(note_out.shape) < note_out
 
-            print("OUT: " + str(song_reps[i]) + ":" + str(12 * np.where(song[i,:,:] >= 0.5)[1] + np.where(song[i,:,:] >= 0.5)[0]))
+            print("OUT: " + str(song_reps[i]) + ":" + str(PITCHES * np.where(song[i,:,:] >= 0.5)[1] + np.where(song[i,:,:] >= 0.5)[0]))
 
-            next_notes = np.reshape(song[i,:,:], (1,1,12,10))
-            next_durations = np.zeros((1,1,8), dtype=np.float32)
+            next_notes = np.reshape(song[i,:,:], (1,1,PITCHES,OCTAVES))
+            next_durations = np.zeros((1,1,DURATIONS), dtype=np.float32)
             next_durations[0,0,duration_i] = 1
         
         # save the song
