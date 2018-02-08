@@ -58,8 +58,8 @@ with tf.Session() as sess:
     ################################################################################
 
     params = {}
-    params['RNN_NOTES_CHANNELS']    = [64, 128]
-    params['RNN_DURATION_CHANNELS'] = [32, 64]
+    params['RNN_NOTES_CHANNELS']    = [64, 64]
+    params['RNN_DURATION_CHANNELS'] = [16, 16]
     params['LEARNING_RATE']         = 1e-4
 
     #estimator = tf.estimator.Estimator(model_fn=model.model_fn, model_dir='model', params=params)
@@ -76,11 +76,11 @@ with tf.Session() as sess:
     ##                           TRAINING LOOP                                    ##
     ################################################################################
 
-    TIME_STEPS = 101
-    LOSS_TIME_STEPS = 100
+    TIME_STEPS = 100
+    LOSS_TIME_STEPS = 50
     NUM_EPOCHS = 1000
     TRAIN_STEPS = 100
-    BATCH_SIZE = 200
+    BATCH_SIZE = 50
     SONG_LENGTH = 640
 
     def input_fn():
@@ -122,7 +122,8 @@ with tf.Session() as sess:
 
             note_out, duration_out, next_state = net.predict(next_notes, next_durations, next_state)
 
-            song_reps[i] = 2 ** np.argmax(duration_out)
+            duration_i = np.random.choice(8, p=duration_out)
+            song_reps[i] = 2 ** duration_i
             # randomly select notes based on outputs as probability
             song[i,:,:] = np.random.random(note_out.shape) < note_out
 
@@ -130,7 +131,7 @@ with tf.Session() as sess:
 
             next_notes = np.reshape(song[i,:,:], (1,1,12,10))
             next_durations = np.zeros((1,1,8), dtype=np.float32)
-            next_durations[0,0,np.argmax(duration_out)] = 1
+            next_durations[0,0,duration_i] = 1
         
         # save the song
         midifile = postprocess(song_reps, song)
