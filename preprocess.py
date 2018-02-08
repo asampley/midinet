@@ -43,7 +43,10 @@ if __name__ == '__main__':
     OCTAVES = 11 # octaves in midi
     notes = np.zeros((0, PITCHES, OCTAVES), dtype=np.float32)
     reps  = np.zeros((0,), dtype=np.float32)
-    
+   
+    # remove invalid notes for midi
+    notes[:,8:,10] = 0
+
     # create padding between songs
     pad = np.zeros((1, PITCHES, OCTAVES), dtype=np.float32)
     padreps = np.array((args.waittime,))
