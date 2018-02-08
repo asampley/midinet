@@ -114,7 +114,7 @@ class Net:
         # assuming that absolute difference between output and correct answer is 0.5
         # or less we can round it to the correct output.
         with tf.name_scope("note_accuracy"):
-            accuracy = 1 - tf.reduce_mean(tf.abs(self.notes_labels - tf.cast(self.note_out > 0.5, tf.float32)))
+            accuracy = tf.reduce_mean(tf.cast(tf.reduce_all(tf.equal(self.notes_labels > 0.5, self.note_out > 0.5), axis=[2,3]), tf.float32))
         with tf.name_scope("duration_accuracy"):
             duration_accuracy = tf.reduce_mean(tf.cast(tf.equal(tf.argmax(self.duration_out, axis=2),tf.argmax(self.durations_labels, axis=2)), tf.float32))
         
