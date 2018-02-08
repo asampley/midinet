@@ -9,7 +9,6 @@ class Net:
 
         initializer = tf.contrib.layers.xavier_initializer() # initializer for fc layers
 
-        #RNN_HIDDEN           = params['RNN_HIDDEN']
         RNN_NOTES_CHANNELS    = params['RNN_NOTES_CHANNELS']
         RNN_DURATION_CHANNELS = params['RNN_DURATION_CHANNELS']
         LEARNING_RATE         = params['LEARNING_RATE']
@@ -42,64 +41,6 @@ class Net:
             self.times_in   = tf.shape(self.notes_in)[0]
         with tf.name_scope("batch_size"):
             self.batch_size = tf.shape(self.notes_in)[1]
-
-        ## Make one rnn for each octave
-        ## Given inputs (time, batch, pitch) outputs a tuple
-        ##  - outputs: (time, batch, RNN_HIDDEN)
-        ##  - states:  (time, batch, hidden_size)
-        #rnn_octave_output = []
-        #self.rnn_octave_state = ()
-        #with tf.name_scope("Octave_RNNs") as scope:
-        #    cell = self.cell(NUM_LAYERS, RNN_HIDDEN, self.keep_prob)
-        #    # create trainable initial state
-        #    with tf.name_scope("State"):
-        #        states = Net.get_state_variables(self.batch_size, cell)
-        #    for i in range(0, OCTAVES):
-        #        # create rnn
-        #        output, state = tf.nn.dynamic_rnn(cell, self.notes_in[:,:,:,i], initial_state=states, time_major=True, scope=scope)
-        #        rnn_octave_output.append(output)
-        #        self.rnn_octave_state = self.rnn_octave_state + state
-        #    # stack outputs of rnns to be (time, batch, RNN_HIDDEN, octave)
-        #    rnn_octave_output = tf.stack(rnn_octave_output, axis=3)
-        #
-        ## make fc to map rnn output to (time, batch, octave, pitch)
-        #with tf.name_scope("FC_RNN_1"):
-        #    W = tf.Variable(initializer((RNN_HIDDEN, PITCHES)), name='W')
-        #    b = tf.Variable(initializer((PITCHES,)), name='b')
-        #    self.fcr1 = tf.tensordot(rnn_octave_output, W, [[2],[0]]) + b
-        #    self.fcr1 = tf.nn.leaky_relu(self.fcr1, 0.2)
-        #    self.fcr1 = tf.layers.dropout(self.fcr1, rate=self.keep_prob)
-        #
-        ## Make one rnn for each pitch
-        ## Given inputs (time, batch, octave) outputs a tuple
-        ##  - outputs: (time, batch, RNN_HIDDEN)
-        ##  - states:  (time, batch, hidden_size)
-        #rnn_pitch_output = []
-        #self.rnn_pitch_state = ()
-        #with tf.name_scope("Pitch_RNNs") as scope:
-        #    cell = self.cell(NUM_LAYERS, RNN_HIDDEN, self.keep_prob)
-        #    # create trainable initial state
-        #    with tf.name_scope("State"):
-        #        states = Net.get_state_variables(self.batch_size, cell)
-        #    for i in range(0, PITCHES):
-        #        # create rnn
-        #        output, state = tf.nn.dynamic_rnn(cell, self.fcr1[:,:,:,i], initial_state=states, time_major=True, scope=scope)
-        #        rnn_pitch_output.append(output)
-        #        self.rnn_pitch_state = self.rnn_pitch_state + state
-        #    # stack outputs of rnns to be (time, batch, RNN_HIDDEN, pitch)
-        #    rnn_pitch_output = tf.stack(rnn_pitch_output, axis=3)
-        #
-        #self.rnn_state = self.rnn_octave_state + self.rnn_pitch_state
-        #
-        ## make fc to map rnn output to (time, batch, pitch, octave)
-        #with tf.name_scope("FC_RNN_2"):
-        #    W = tf.Variable(initializer((RNN_HIDDEN, OCTAVES)), name='W')
-        #    b = tf.Variable(initializer((OCTAVES,)), name='b')
-        #    self.fcr2 = tf.tensordot(rnn_pitch_output, W, [[2],[0]]) + b
-        #    self.fcr2 = tf.nn.leaky_relu(self.fcr2, 0.2)
-        #    self.fcr2 = tf.layers.dropout(self.fcr2, rate=self.keep_prob)
-        # 
-        #rnn_output = self.fcr2
 
         # create convolutional rnn with notes as input (time, batch, pitch, octave)
         # output (time, batch, pitch, octave)
