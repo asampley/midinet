@@ -122,7 +122,8 @@ with tf.Session() as sess:
 
             note_out, duration_out, next_state = net.predict(next_notes, next_durations, next_state)
 
-            duration_i = np.random.choice(8, p=duration_out)
+            print(duration_out[0,0,:])
+            duration_i = np.random.choice(8, p=duration_out[0,0,:])
             song_reps[i] = 2 ** duration_i
             # randomly select notes based on outputs as probability
             song[i,:,:] = np.random.random(note_out.shape) < note_out
