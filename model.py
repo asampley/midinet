@@ -94,7 +94,7 @@ class Net:
             with tf.name_scope("state"):
                 states = Net.get_state_variables(self.batch_size, cell)
             rnn_duration_output, rnn_duration_state = tf.nn.dynamic_rnn(cell, durations_with_notes, initial_state=states, time_major=True, scope=scope)
-            rnn_duration_output = tf.nn.softmax(rnn_duration_output, axis=-1)
+            rnn_duration_output = tf.nn.softmax(rnn_duration_output, -1)
 
         # create tuple of rnn states
         self.rnn_state = rnn_notes_state + rnn_duration_state
