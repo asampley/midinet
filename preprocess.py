@@ -28,6 +28,7 @@ def preprocess(f):
 def postprocess(rep, notes):
     # turn notes into integers from 0 to 127
     notes = notes * 127
+    np.clip(notes, 0, 127, notes)
     notes = notes.astype(np.int8, copy=False)
 
     # turn repetitions into times
