@@ -1,71 +1,49 @@
-from midi2bytes import *
+import midi2data as m2d
 import numpy as np
 import argparse
 import os
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser('Preprocess midi files for the neural network by turning them into vectors of notes')
+    parser = argparse.ArgumentParser('Preprocess midi files for the neural network by turning them into tensors describing notes')
     parser.add_argument('outputfile', help='File to save the numpy array to')
     parser.add_argument('files', nargs='+', help='Midi files to turn into data')
     parser.add_argument('--waittime', '-t', help='Number of 32nd notes to wait in between songs', type=int, default=32) # default 1 whole note
     parser.add_argument('--midi', '-m', help='Save as a midi file instead of a numpy file', action='store_true')
+    parser.add_argument('--volumes', '-v', help='Number of different volumes to save', type=int, default=2)
+    parser.add_argument('--durations', '-d', help='Number of different durations to save', type=int, default=8)
     args = parser.parse_args()
 
-def preprocess(f):
-    t, notes = midi2bytes(f)
+def preprocess(f, volumes=2, duration_categories=8):
+    return m2d.midi2data(f, volumes=volumes, duration_categories=duration_categories)
 
-    # turn notes into reals from zero to one
-    notes.astype(np.float32, copy=False)
-    notes = notes / 127
-
-    # calculate repetitions of notes rather than timestamps
-    rep = np.zeros((t.size,))
-    rep[0] = t[0]
-    rep[1:] = np.diff(t)
-
-    return rep, notes
-
-def postprocess(rep, notes):
-    # turn notes into integers from 0 to 127
-    notes = notes * 127
-    np.clip(notes, 0, 127, notes)
-    notes = notes.astype(np.int8, copy=False)
-
-    # turn repetitions into times
-    t = np.zeros((rep.size,), np.int64)
-    t[0] = rep[0]
-    for i in range(1, t.size):
-        t[i] = t[i-1] + rep[i]
-
-    return bytes2midi(t, notes)
+def postprocess(messages, volumes=2, duration_categories=8):
+    return m2d.data2midi(messages, volumes=volumes, duration_categories=duration_categories)
 
 if __name__ == '__main__':
-    PITCHES = 12 # pitches in an octave
-    OCTAVES = 11 # octaves in midi
-    notes = np.zeros((0, PITCHES, OCTAVES), dtype=np.float32)
-    reps  = np.zeros((0,), dtype=np.float32)
-   
-    # remove invalid notes for midi
-    notes[:,8:,10] = 0
+    # hold each output in a list
+    message_arrays = []
 
     # create padding between songs
-    pad = np.zeros((1, PITCHES, OCTAVES), dtype=np.float32)
-    padreps = np.array((args.waittime,))
+    pad_durations = m2d.ticks2durations(args.waittime, args.durations)
+    pad = np.zeros((len(pad_durations), 4), dtype=np.int8)
+    pad[:,3] = pad_durations
+        
+    # go through each file and add them to the list with pads in between
     for f in args.files:
-        repsi, notesi = preprocess(f)
+        messages_f = preprocess(f, volumes=args.volumes, duration_categories=args.durations)
+        message_arrays += [messages_f, pad]
 
-        reps = np.concatenate((reps, padreps, repsi), axis=0)
-        notes = np.concatenate((notes, pad, notesi), axis=0)
-    
-    assert(reps.shape[0] == notes.shape[0], "Programming error, repetitions and notes do not have the same number of elements")
+    # concatenate all arrays into numpy array
+    messages = np.concatenate(message_arrays, axis=0)
+    print(messages)
 
     print("Created data with")
     print("\t%s songs"%(len(args.files)))
-    print("\t%s timesteps"%(reps.shape[0]))
-    print("\t%s 32nd notes"%(np.sum(reps[:])))
+    print("\t%s timesteps"%(messages.shape[0]))
+    print("\t%s 32nd notes"%(np.sum(messages[:,3])))
 
     if args.midi:
-        mfile = postprocess(reps, notes)
+        mfile = postprocess(messages)
         mfile.save(args.outputfile)
     else:
-        np.savez(args.outputfile, reps=reps, notes=notes)
+        np.save(args.outputfile, messages)
