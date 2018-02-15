@@ -154,8 +154,9 @@ def data2midi(messages, min_note_denom=32, duration_categories=8, volumes=2):
         # also do this on the last message
         if i == messages.shape[0] - 1 or not np.all(messages[i,:3] == messages[i+1,:3]):
             note = pitch_octave2note(messages[i,0], messages[i,1])
-            time = ticks2time(durations2ticks(durations),delta_step)
+            time = ticks2time(durations2ticks(durations), delta_step)
             velocity = volume2velocity(messages[i,2], VOLUMES)
+
             msg = mido.Message('note_on', note=note, time=time, velocity=velocity)
             track.append(msg)
             durations = []
