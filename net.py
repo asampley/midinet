@@ -5,56 +5,25 @@ import random
 import tensorflow as tf
 import tensorflow.contrib.layers as layers
 import model
+import random
 from preprocess import postprocess
+import os
 
-data = np.load('data/all.npz')
-reps = data['reps']
-notes = data['notes']
+# make directories for saving things
+if not os.path.exists('songs'):
+    os.makedirs('songs')
 
-PITCHES = 12 # pitches in music
-OCTAVES = 11 # octaves in midi
-DURATIONS = 8 # number of allowed durations
+data  = np.load('data/all.npz')
+msgs  = data['messages']
+maxes = data['maxes']
+names = data['names']
 
-def get_instance(reps, notes, time_steps):
-    start = np.random.randint(0, reps.shape[0] - time_steps) # we'll miss a bit of data at the end, but that's okay
-
-    notes_instance = np.zeros((time_steps, notes.shape[1], notes.shape[2]))
-    durations = np.zeros((time_steps, DURATIONS)) # (1/32 note, 1/16 note, ..., 4 whole notes)
-
-    i = 0
-    i_data = 0
-    remaining_duration = 0
-    while i < time_steps:
-        remaining_duration = int(reps[start+i_data])
-        
-        # reduce durations into intervals of at most 4 whole notes
-        i_duration = 7
-        while remaining_duration > 0 and i < time_steps:
-            if remaining_duration >= 2 ** i_duration:
-                notes_instance[i,:,:] = notes[start+i_data,:,:]
-                durations[i,i_duration] = 1
-                remaining_duration = remaining_duration - 2 ** i_duration
-            else:
-                i_duration = i_duration - 1
-            i = i + 1
-        i_data = i_data + 1
-            
-#    np.set_printoptions(threshold=np.inf)
-#    for i in range(notes.shape[0]):
-#        print(np.where(notes[i,:] != 0)[0])
-
-    return notes_instance, durations
-
-def generate_batch(reps, notes, time_steps, batch_size):
-    notes_batch = np.empty((time_steps, batch_size, PITCHES, OCTAVES))
-    durations   = np.empty((time_steps, batch_size, DURATIONS))
-
-    for i in range(batch_size):
-        notes_i, durations_i = get_instance(reps, notes, time_steps)
-        notes_batch[:, i, :, :] = notes_i
-        durations[:, i, :] = durations_i
-    return notes_batch, durations
-
+def get_batch(data, time_steps, batch_size):
+    batch = np.zeros((time_steps, batch_size, data.shape[1])) 
+    for b in range(batch_size):
+        start = random.randint(0, data.shape[0] - time_steps)
+        batch[:,b,:] = data[start:start+time_steps,:]
+    return batch
 
 with tf.Session() as sess:
     ################################################################################
@@ -62,11 +31,11 @@ with tf.Session() as sess:
     ################################################################################
 
     params = {}
-    params['RNN_NOTES_CHANNELS']    = [64, 64]
-    params['RNN_DURATION_CHANNELS'] = [16, 16]
-    params['LEARNING_RATE']         = 1e-4
+    params['RNN_SIZES']     = [64, 64]
+    params['DATA_SIZES']    = maxes
+    params['DATA_NAMES']    = names
+    params['LEARNING_RATE'] = 1e-4
 
-    #estimator = tf.estimator.Estimator(model_fn=model.model_fn, model_dir='model', params=params)
     net = model.Net(sess, params)
 
     # attempt to restore
@@ -87,58 +56,44 @@ with tf.Session() as sess:
     BATCH_SIZE = 50
     SONG_LENGTH = 640
 
-    def input_fn():
-        x, y = generate_batch(notes, reps, time_steps=TIME_STEPS, batch_size=BATCH_SIZE)
-        return { 'x': tf.constant(x, dtype=tf.float32) }, tf.constant(y, dtype=tf.float32)
-
     for epoch in range(NUM_EPOCHS):
-        #estimator.train(input_fn=input_fn, steps=TRAIN_STEPS)
-        #eval_metrics = estimator.evaluate(input_fn=input_fn, steps=10)
-        #print("Epoch %d: %s"%(epoch, eval_metrics))
         for ti in range(TRAIN_STEPS):
-            notes_batch, durations_batch = generate_batch(reps, notes, time_steps=TIME_STEPS, batch_size=BATCH_SIZE)
-            net.train(notes_batch, durations_batch, LOSS_TIME_STEPS)
+            batch = get_batch(msgs, time_steps=TIME_STEPS, batch_size=BATCH_SIZE)
+            net.train(batch, LOSS_TIME_STEPS)
 
             if ti % 10 == 0:
-                summaries = net.summarize(notes_batch, durations_batch, LOSS_TIME_STEPS)
+                summaries = net.summarize(batch, LOSS_TIME_STEPS)
 
         # save net
         net.save()
         print('Saved snapshot of model')
 
         # make a song of length to test
-        next_state = None
-        next_notes = np.random.randint(0, 2, size=(1, 1, PITCHES, OCTAVES)).astype(np.float32)
-        next_durations = np.zeros((1, 1, DURATIONS), dtype=np.float32)
-        next_durations[0,0,6] = 1
-        song_reps = np.zeros((SONG_LENGTH,), dtype=np.float32)
-        song = np.zeros((SONG_LENGTH, PITCHES, OCTAVES), dtype=np.float32)
+        messages = np.zeros((SONG_LENGTH, msgs.shape[1]), dtype=np.int32)
+        in_state = None
+        in_msg = np.array([random.randint(0,m-1) for m in maxes], ndmin=3)
 
-        for i in range(SONG_LENGTH):
-            #predict_input_fn = tf.estimator.inputs.numpy_input_fn(
-            #    x={"x": next_input},
-            #    num_epochs=1,
-            #    shuffle=False)
-            #next_input_gen = estimator.predict(predict_input_fn)
-            #output = next(next_input_gen)
-            
-            print("IN:  " + str(2 ** np.argmax(next_durations)) + ":" + str(12 * np.where(next_notes >= 0.5)[3] + np.where(next_notes >= 0.5)[2]))
+        for i in range(SONG_LENGTH):            
+            # use network to get probabilities of each piece of message
+            out_probs, out_state = net.predict(in_msg, in_state)
 
-            note_out, duration_out, next_state = net.predict(next_notes, next_durations, next_state)
+            # randomly select based on output values, which should sum to one
+            out_probs_squeezed = map(np.squeeze, out_probs)
+            out_msg = np.array([np.random.choice(len(prob), p=prob) for prob in out_probs_squeezed], ndmin=3)
 
-            duration_i = np.random.choice(8, p=duration_out[0,0,:])
-            song_reps[i] = 2 ** duration_i
-            # randomly select notes based on outputs as probability
-            song[i,:,:] = np.random.random(note_out.shape) < note_out
+            # append to song
+            messages[i,:] = out_msg
 
-            print("OUT: " + str(song_reps[i]) + ":" + str(PITCHES * np.where(song[i,:,:] >= 0.5)[1] + np.where(song[i,:,:] >= 0.5)[0]))
+            # print out as we generate the song
+            print("IN: " + str(in_msg))
+            print("OUT: " + str(out_msg))
 
-            next_notes = np.reshape(song[i,:,:], (1,1,PITCHES,OCTAVES))
-            next_durations = np.zeros((1,1,DURATIONS), dtype=np.float32)
-            next_durations[0,0,duration_i] = 1
-        
+            # take output as next input
+            in_state = out_state
+            in_msg = out_msg
+
         # save the song
-        midifile = postprocess(song_reps, song)
+        midifile = postprocess(messages)
         songfilename = 'songs/%s.mid'%(net.global_step())
         midifile.save(songfilename)
         print('Saved a new song at ' + songfilename)
