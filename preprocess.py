@@ -35,7 +35,6 @@ if __name__ == '__main__':
 
     # concatenate all arrays into numpy array
     messages = np.concatenate(message_arrays, axis=0)
-    print(messages)
 
     print("Created data with")
     print("\t%s songs"%(len(args.files)))
