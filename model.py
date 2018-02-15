@@ -91,7 +91,7 @@ class Net:
         with tf.name_scope("accuracy"):
             accuracy = [None] * DATA_ELEMENTS
             for i in range(DATA_ELEMENTS):
-                accuracy[i] = tf.reduce_mean(tf.cast(tf.argmax(self.output_slices[i], axis=-1) == tf.argmax(self.label_slices[i], axis=-1), tf.float32))
+                accuracy[i] = tf.reduce_mean(tf.cast(tf.equal(tf.argmax(self.output_slices[i], axis=-1), tf.argmax(self.label_slices[i], axis=-1)), tf.float32))
         
         # Make summary op and file
         with tf.name_scope("summaries"):
