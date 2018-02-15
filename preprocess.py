@@ -46,4 +46,6 @@ if __name__ == '__main__':
         mfile = postprocess(messages)
         mfile.save(args.outputfile)
     else:
-        np.save(args.outputfile, messages)
+        maxes = (m2d._PITCHES, m2d._OCTAVES, args.volumes, args.durations)
+        names = ('pitch', 'octave', 'volume', 'duration')
+        np.savez(args.outputfile, messages=messages, maxes=maxes, names=names)
