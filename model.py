@@ -80,9 +80,9 @@ class Net:
             # rejoin after softmax into one vector
             self.output = tf.concat(self.output_slices, -1)
 
-        # compute elementwise L2 norm
+        # compute cross entropy
         with tf.name_scope("error"):
-            error = tf.reduce_mean(tf.square(self.labels - self.output))
+            error = -tf.reduce_sum(tf.multiply(self.labels, tf.log(self.output)))
 
         # optimize
         self.train_fn = tf.train.AdamOptimizer(learning_rate=LEARNING_RATE).minimize(error, global_step=self._global_step)
