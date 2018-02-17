@@ -82,7 +82,7 @@ class Net:
 
         # compute cross entropy
         with tf.name_scope("error"):
-            error = -tf.reduce_sum(tf.multiply(self.labels, tf.log(self.output)))
+            error = tf.reduce_mean(-tf.reduce_sum(tf.multiply(self.labels, tf.log(self.output)), axis=2))
 
         # optimize
         self.train_fn = tf.train.AdamOptimizer(learning_rate=LEARNING_RATE).minimize(error, global_step=self._global_step)
