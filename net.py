@@ -79,8 +79,8 @@ with tf.Session() as sess:
 
             # randomly select based on output values, which should sum to one
             out_probs_squeezed = map(np.squeeze, out_probs)
-            #out_msg = np.array([np.random.choice(len(prob), p=prob) for prob in out_probs_squeezed], ndmin=3)
-            out_msg = np.array([np.argmax(prob) for prob in out_probs_squeezed], ndmin=3)
+            out_msg = np.array([np.random.choice(len(prob), p=prob) for prob in out_probs_squeezed], ndmin=3)
+            #out_msg = np.array([np.argmax(prob) for prob in out_probs_squeezed], ndmin=3)
 
             # append to song
             messages[i,:] = out_msg
