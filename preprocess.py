@@ -13,10 +13,10 @@ if __name__ == '__main__':
     parser.add_argument('--durations', '-d', help='Number of different durations to save', type=int, default=8)
     args = parser.parse_args()
 
-def preprocess(f, volumes=2, duration_categories=8):
+def preprocess(f, volumes=1, duration_categories=8):
     return m2d.midi2data(f, volumes=volumes, duration_categories=duration_categories)
 
-def postprocess(messages, volumes=2, duration_categories=8):
+def postprocess(messages, volumes=1, duration_categories=8):
     # trim invalid midi notes
     messages = messages[np.logical_or(messages[:,0] < 8, messages[:,1] != 10),:]
     return m2d.data2midi(messages, volumes=volumes, duration_categories=duration_categories)
