@@ -9,12 +9,11 @@ def velocity2volume(velocity, volumes):
     """
     Returns a categorical volume.
 
-    0 if the velocity is 0
-    [1, volumes) if the velocity is not 0, by equally dividing the interval [0,128) into <volumes-1> sections
+    [0, volumes) is returned by equally dividing the velocity interval [0,128) into <volumes-1> sections
 
     Output is undefined for messages that are not note_on
     """
-    return 1 + (volumes-1) * velocity // 128 if velocity != 0 else 0
+    return (volumes * velocity) // 128
 
 def volume2velocity(volume, volumes):
     """
@@ -22,7 +21,7 @@ def volume2velocity(volume, volumes):
     Can be approximated as the inverse of _message2volume, 
     but it only returns the highest possible velocity that would produce the volume
     """
-    return volume * 128 // (volumes-1) - 1 if volume != 0 else 0
+    return ((volume + 1) * 128) // volumes - 1
 
 def note2pitch_octave(note):
     """
@@ -84,9 +83,14 @@ def durations2ticks(durations):
         ticks += 2 ** (duration - 1) if duration != 0 else 0
     return ticks
 
-def midi2data(filename, min_note_denom=32, duration_categories=8, volumes=2):
-    DURATIONS = duration_categories # number of duration categories, from 0 notes, to (2^(DURATIONS-2))/min_note_denom notes. Must be at least 2.
-    VOLUMES   = volumes             # number of volumes, evenly dividing 0 to 127. Must be at least 2.
+def midi2data(filename, min_note_denom=32, duration_categories=8, volumes=1):
+    """
+    Convert a midi file into an array of 4-vectors, containing
+    [pitch, octave, volume, duration]
+
+    All note_off and note_on with velocity 0 messages are ignored.
+    This means that notes cannot really be held and preserved through this function.
+    """
 
     midifile = mido.MidiFile(filename)
 
@@ -101,31 +105,36 @@ def midi2data(filename, min_note_denom=32, duration_categories=8, volumes=2):
     # create array with the following four elements in each row
     # [pitch, octave, volume, duration]
     messages = []
+    time = 0
     for msg in mido.merge_tracks(midifile.tracks):
-        if msg.is_meta or not (msg.type == 'note_on' or msg.type == 'note_off'):
+        time += msg.time # accumulate time even for ignored messages
+        if msg.is_meta or msg.type != 'note_on' or msg.velocity == 0:
             continue
         
         # convert message note to pitch and octave
         pitch, octave = note2pitch_octave(msg.note)
 
         # convert message velocity into volume.
-        volume = 0 if msg.type == 'note_off' else velocity2volume(msg.velocity, VOLUMES)
+        volume = velocity2volume(msg.velocity, volumes)
 
         # convert message time into several messages that add up to the total time, within delta_step
-        ticks     = time2ticks(msg.time, delta_step)
-        durations = ticks2durations(ticks, DURATIONS)
+        ticks     = time2ticks(time, delta_step)
+        durations = ticks2durations(ticks, duration_categories)
         for duration in durations:
             messages += [[pitch, octave, volume, duration]]
+        
+        time = 0 # reset time after adding a message
 
     # finally, turn it into a numpy array, and return it
     messages = np.array(messages)
     return messages
 
-def data2midi(messages, min_note_denom=32, duration_categories=8, volumes=2):
+def data2midi(messages, min_note_denom=32, duration_categories=8, volumes=1):
+    """
+    Convert a numpy array of shape (?,4) into a midi file
+    Notes are immediately followed by a note off signal, so notes cannot be held.
+    """
     assert(messages.shape[1] == 4 and np.issubdtype(messages.dtype, np.integer))
-    
-    DURATIONS = duration_categories # number of duration categories, from 0 notes, to (2^(DURATIONS-1))/min_note_denom notes. Must be at least 2.
-    VOLUMES   = volumes             # number of volumes, evenly dividing 0 to 127. Must be at least 2.
 
     midifile = mido.MidiFile()
     midifile.add_track()
@@ -151,13 +160,16 @@ def data2midi(messages, min_note_denom=32, duration_categories=8, volumes=2):
         durations += [messages[i,3]]
 
         # if any of the message (excluding the duration) is different from the next, put all the accumulated durations onto the midi file
+        # as well as a note_off message immediately after
         # also do this on the last message
         if i == messages.shape[0] - 1 or not np.all(messages[i,:3] == messages[i+1,:3]):
             note = pitch_octave2note(messages[i,0], messages[i,1])
             time = ticks2time(durations2ticks(durations), delta_step)
-            velocity = volume2velocity(messages[i,2], VOLUMES)
+            velocity = volume2velocity(messages[i,2], volumes)
 
             msg = mido.Message('note_on', note=note, time=time, velocity=velocity)
+            track.append(msg)
+            msg = mido.Message('note_off', note=note, time=0)
             track.append(msg)
             durations = []
         
