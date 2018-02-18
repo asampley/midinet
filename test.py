@@ -20,4 +20,13 @@ track.append(mido.Message('note_on', note=14, velocity=127, time=240))
 track.append(mido.Message('note_on', note=13, velocity=127, time=300))
 track.append(mido.Message('note_on', note=15, velocity=127, time=600))
 
+track.append(mido.Message('note_on', note=86, velocity=127, time=480))
+track.append(mido.Message('note_on', note=86, velocity=0, time=0))
+track.append(mido.Message('note_on', note=87, velocity=127, time=480))
+track.append(mido.Message('note_on', note=87, velocity=0, time=0))
+track.append(mido.Message('note_on', note=86, velocity=127, time=480))
+track.append(mido.Message('note_on', note=86, velocity=0, time=0))
+track.append(mido.Message('note_on', note=87, velocity=127, time=480))
+track.append(mido.Message('note_on', note=87, velocity=0, time=0))
+
 mfile.save('test/test.mid')
