@@ -31,10 +31,10 @@ with tf.Session() as sess:
     ################################################################################
 
     params = {}
-    params['RNN_SIZES']     = [128, 256, 512]
+    params['RNN_SIZES']     = [2048]
     params['DATA_SIZES']    = maxes
     params['DATA_NAMES']    = names
-    params['LEARNING_RATE'] = 1e-3
+    params['LEARNING_RATE'] = 1e-6
 
     net = model.Net(sess, params)
 
@@ -50,11 +50,11 @@ with tf.Session() as sess:
     ################################################################################
 
     TIME_STEPS = 100
-    LOSS_TIME_STEPS = 50
+    LOSS_TIME_STEPS = 99
     NUM_EPOCHS = 1000
     TRAIN_STEPS = 100
     BATCH_SIZE = 50
-    SONG_LENGTH = 640
+    SONG_LENGTH = 200
 
     for epoch in range(NUM_EPOCHS):
         for ti in range(TRAIN_STEPS):
@@ -78,7 +78,7 @@ with tf.Session() as sess:
             out_probs, out_state = net.predict(in_msg, in_state)
 
             # randomly select based on output values, which should sum to one
-            out_probs_squeezed = map(np.squeeze, out_probs)
+            out_probs_squeezed = [np.squeeze(out_prob, axis=(0,1)) for out_prob in out_probs]
             out_msg = np.array([np.random.choice(len(prob), p=prob) for prob in out_probs_squeezed], ndmin=3)
             #out_msg = np.array([np.argmax(prob) for prob in out_probs_squeezed], ndmin=3)
 
