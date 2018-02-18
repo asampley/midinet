@@ -9,7 +9,7 @@ if __name__ == '__main__':
     parser.add_argument('files', nargs='+', help='Midi files to turn into data')
     parser.add_argument('--waittime', '-t', help='Number of 32nd notes to wait in between songs', type=int, default=32) # default 1 whole note
     parser.add_argument('--midi', '-m', help='Save as a midi file instead of a numpy file', action='store_true')
-    parser.add_argument('--volumes', '-v', help='Number of different volumes to save', type=int, default=2)
+    parser.add_argument('--volumes', '-v', help='Number of different volumes to save', type=int, default=1)
     parser.add_argument('--durations', '-d', help='Number of different durations to save', type=int, default=8)
     args = parser.parse_args()
 
