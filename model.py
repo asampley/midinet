@@ -109,7 +109,7 @@ class Net:
         self.saver = tf.train.Saver()
 
     @staticmethod
-    def cell(num_hidden, keep_prob, activation=tf.nn.relu):
+    def cell(num_hidden, keep_prob, activation=tf.tanh):
         # create cell definition
         cells = [None] * len(num_hidden)
         for i in range(len(num_hidden)):
