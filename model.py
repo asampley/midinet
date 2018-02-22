@@ -10,11 +10,13 @@ class Net:
         LEARNING_RATE = params['LEARNING_RATE']
         DATA_SIZES    = params['DATA_SIZES']
         DATA_NAMES    = params['DATA_NAMES']
+        DATA_WEIGHTS  = params['DATA_WEIGHTS']
 
-        assert(len(DATA_SIZES) == len(DATA_NAMES))
+        assert(len(DATA_SIZES) == len(DATA_NAMES) and len(DATA_NAMES) == len(DATA_WEIGHTS))
         DATA_ELEMENTS = len(DATA_SIZES)
 
         self.messages = tf.placeholder(tf.int32, (None, None, DATA_ELEMENTS), 'messages') # (time, batch, message)
+        self.weights = tf.constant(DATA_WEIGHTS, name='weights')
         
         with tf.name_scope("one_hot_stitch"):
             # slice and create one_hot vectors for each variable (pitch, octave, volume, duration)
@@ -40,7 +42,6 @@ class Net:
             self.label_slices = [None] * DATA_ELEMENTS
             for i in range(DATA_ELEMENTS):
                 self.label_slices[i] = one_hots[i][-self.loss_time_steps:, ...]
-            self.labels = tf.concat(self.label_slices, -1)
 
         # global step counter
         self._global_step = tf.Variable(0, name='global_step', trainable=False)
@@ -73,16 +74,19 @@ class Net:
         # slice and do softmax for each one_hot vector
         with tf.name_scope("output_softmax"):
             splits = tf.split(rnn_output, DATA_SIZES, 2)
-            self.output_slices = [None] * len(DATA_SIZES)
-            for i in range(len(DATA_SIZES)):
+            self.output_slices = [None] * DATA_ELEMENTS
+            for i in range(DATA_ELEMENTS):
                 name = DATA_NAMES[i] + '_softmax'
                 self.output_slices[i] = tf.nn.softmax(splits[i], -1, name=name)
-            # rejoin after softmax into one vector
-            self.output = tf.concat(self.output_slices, -1)
 
         # compute cross entropy
         with tf.name_scope("error"):
-            error = tf.reduce_mean(-tf.reduce_sum(tf.multiply(self.labels, tf.log(self.output)), axis=2))
+            self.error_slices = [None] * DATA_ELEMENTS
+            for i in range(DATA_ELEMENTS):
+                name = DATA_NAMES[i] + '_error'
+                with tf.name_scope(name):
+                    self.error_slices[i] = tf.reduce_mean(-tf.reduce_sum(tf.multiply(self.label_slices[i], tf.log(self.output_slices[i])), axis=2))
+            error = tf.reduce_sum(self.weights * tf.stack(self.error_slices, 0))
 
         # optimize
         self.train_fn = tf.train.AdamOptimizer(learning_rate=LEARNING_RATE).minimize(error, global_step=self._global_step)

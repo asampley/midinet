@@ -34,6 +34,7 @@ with tf.Session() as sess:
     params['RNN_SIZES']     = [2048]
     params['DATA_SIZES']    = maxes
     params['DATA_NAMES']    = names
+    params['DATA_WEIGHTS']  = [1.0, 1.0, 1.0, 1.0]
     params['LEARNING_RATE'] = 1e-6
 
     net = model.Net(sess, params)
