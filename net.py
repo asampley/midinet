@@ -31,11 +31,11 @@ with tf.Session() as sess:
     ################################################################################
 
     params = {}
-    params['RNN_SIZES']     = [2048]
+    params['RNN_SIZES']     = [512, 512]
     params['DATA_SIZES']    = maxes
     params['DATA_NAMES']    = names
     params['DATA_WEIGHTS']  = [1.0, 1.0, 1.0, 1.0]
-    params['LEARNING_RATE'] = 1e-6
+    params['LEARNING_RATE'] = 1e-4
 
     net = model.Net(sess, params)
 
@@ -50,11 +50,11 @@ with tf.Session() as sess:
     ##                           TRAINING LOOP                                    ##
     ################################################################################
 
-    TIME_STEPS = 100
-    LOSS_TIME_STEPS = 99
+    TIME_STEPS = 101
+    LOSS_TIME_STEPS = 100
     NUM_EPOCHS = 1000
     TRAIN_STEPS = 100
-    BATCH_SIZE = 50
+    BATCH_SIZE = 1000
     SONG_LENGTH = 200
 
     for epoch in range(NUM_EPOCHS):
@@ -72,7 +72,9 @@ with tf.Session() as sess:
         # make a song of length to test
         messages = np.zeros((SONG_LENGTH, msgs.shape[1]), dtype=np.int32)
         in_state = None
-        in_msg = np.array([random.randint(0,m-1) for m in maxes], ndmin=3)
+        #in_msg = np.array([random.randint(0,m-1) for m in maxes], ndmin=3)
+        in_msg = np.array(np.concatenate(([0,5], maxes[2:])), ndmin=3) # middle C
+        print(in_msg)
 
         for i in range(SONG_LENGTH):            
             # use network to get probabilities of each piece of message
