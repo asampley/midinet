@@ -11,6 +11,7 @@ class Net:
         DATA_SIZES    = params['DATA_SIZES']
         DATA_NAMES    = params['DATA_NAMES']
         DATA_WEIGHTS  = params['DATA_WEIGHTS']
+        SAVE_DIR      = params['SAVE_DIR']
 
         assert(len(DATA_SIZES) == len(DATA_NAMES) and len(DATA_NAMES) == len(DATA_WEIGHTS))
         DATA_ELEMENTS = len(DATA_SIZES)
@@ -108,7 +109,7 @@ class Net:
                 tf.summary.histogram(name + '_output', tf.argmax(self.output_slices[i], axis=-1))
 
             self.summaries = tf.summary.merge_all()
-            self.summaryFileWriter = tf.summary.FileWriter('model', self.session.graph)
+            self.summaryFileWriter = tf.summary.FileWriter(SAVE_DIR, self.session.graph)
 
         # Make net saver
         self.saver = tf.train.Saver()

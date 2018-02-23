@@ -11,19 +11,21 @@ import os
 import argparse
 from datetime import datetime
 
-data  = np.load('data/all.npz')
-msgs  = data['messages']
-maxes = data['maxes']
-names = data['names']
-
 # parse arguments
 parser = argparse.ArgumentParser(description='Train and generate music with the neural network described in model.py')
-parser.add_argument('--epochs', '-n', help='Number of times to train and then generate. Default 1000.', type=int, default=1000)
-parser.add_argument('--train', '-t', help='Set the number of batches for each epoch of training. Default 100.', type=int, default=100)
-parser.add_argument('--summarize', '-s', help='Summarize and save every s batches. Default 10.', type=int, default=10)
+parser.add_argument('--data', '-d', help='Numpy file containing the training data. Default "data/all.npz"', type=str, default='data/all.npz')
+parser.add_argument('--epochs', '-n', help='Number of times to train and then generate. Default 1.', type=int, default=1)
+parser.add_argument('--train', '-t', help='Set the number of batches for each epoch of training. Default 0.', type=int, default=0)
+parser.add_argument('--generate', '-g', help='Generate a song every g epochs. Default 1.', type=int, default=1)
+parser.add_argument('--savedir', '-s', help='Directory in which to save the neural network model. Default "model/".', default='model/')
 parser.add_argument('--songlength', '-l', help='Length of song to generate. Default 100.', type=int, default=100)
 parser.add_argument('--songprefix', '-p', help='Prefix to prepend to saved song files. Default "songs/".', type=str, default='songs/')
 args = parser.parse_args()
+
+data  = np.load(args.data)
+msgs  = data['messages']
+maxes = data['maxes']
+names = data['names']
 
 # make directories for saving songs
 songdir = os.path.dirname(args.songprefix)
@@ -48,6 +50,7 @@ with tf.Session() as sess:
     params['DATA_NAMES']    = names
     params['DATA_WEIGHTS']  = [1.0, 1.0, 1.0, 1.0]
     params['LEARNING_RATE'] = 1e-4
+    params['SAVE_DIR']      = args.savedir
 
     net = model.Net(sess, params)
 
@@ -74,42 +77,45 @@ with tf.Session() as sess:
             batch = get_batch(msgs, time_steps=TIME_STEPS, batch_size=BATCH_SIZE)
             net.train(batch, LOSS_TIME_STEPS)
 
-            if ti % args.summarize == 0:
-                summaries = net.summarize(batch, LOSS_TIME_STEPS)
+        if TRAIN_STEPS > 0:
+            # add summary of performance
+            batch = get_batch(msgs, time_steps=TIME_STEPS, batch_size=BATCH_SIZE)
+            summaries = net.summarize(batch, LOSS_TIME_STEPS)
 
-        # save net
-        net.save()
-        print('Saved snapshot of model')
+            # save net
+            net.save()
+            print('Saved snapshot of model')
 
-        # make a song of length to test
-        messages = np.zeros((SONG_LENGTH, msgs.shape[1]), dtype=np.int32)
-        in_state = None
-        #in_msg = np.array([random.randint(0,m-1) for m in maxes], ndmin=3)
-        in_msg = np.array(np.concatenate(([0,5], maxes[2:])), ndmin=3) # middle C
-        print(in_msg)
+        if epoch % args.generate == 0:
 
-        for i in range(SONG_LENGTH):            
-            # use network to get probabilities of each piece of message
-            out_probs, out_state = net.predict(in_msg, in_state)
+            # make a song of length to test
+            messages = np.zeros((SONG_LENGTH, msgs.shape[1]), dtype=np.int32)
+            in_state = None
+            #in_msg = np.array([random.randint(0,m-1) for m in maxes], ndmin=3)
+            in_msg = np.array(np.concatenate(([0,5], maxes[2:])), ndmin=3) # middle C
 
-            # randomly select based on output values, which should sum to one
-            out_probs_squeezed = [np.squeeze(out_prob, axis=(0,1)) for out_prob in out_probs]
-            out_msg = np.array([np.random.choice(len(prob), p=prob) for prob in out_probs_squeezed], ndmin=3)
-            #out_msg = np.array([np.argmax(prob) for prob in out_probs_squeezed], ndmin=3)
+            for i in range(SONG_LENGTH):
+                # use network to get probabilities of each piece of message
+                out_probs, out_state = net.predict(in_msg, in_state)
 
-            # append to song
-            messages[i,:] = out_msg
+                # randomly select based on output values, which should sum to one
+                out_probs_squeezed = [np.squeeze(out_prob, axis=(0,1)) for out_prob in out_probs]
+                out_msg = np.array([np.random.choice(len(prob), p=prob) for prob in out_probs_squeezed], ndmin=3)
+                #out_msg = np.array([np.argmax(prob) for prob in out_probs_squeezed], ndmin=3)
 
-            # print out as we generate the song
-            print("IN: " + str(in_msg))
-            print("OUT: " + str(out_msg))
+                # append to song
+                messages[i,:] = out_msg
 
-            # take output as next input
-            in_state = out_state
-            in_msg = out_msg
+                # print out as we generate the song
+                #print("IN: " + str(in_msg))
+                #print("OUT: " + str(out_msg))
 
-        # save the song
-        midifile = postprocess(messages)
-        songfilename = args.songprefix + str(net.global_step()) + '-' + str(datetime.now()).replace(' ','_').replace(':','-').replace('.','-') + '.mid'
-        midifile.save(songfilename)
-        print('Saved a new song at ' + songfilename)
+                # take output as next input
+                in_state = out_state
+                in_msg = out_msg
+
+            # save the song
+            midifile = postprocess(messages)
+            songfilename = args.songprefix + str(net.global_step()) + '-' + str(datetime.now()).replace(' ','_').replace(':','-').replace('.','-') + '.mid'
+            midifile.save(songfilename)
+            print('Saved a new song at ' + songfilename)
