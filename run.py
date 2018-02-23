@@ -84,10 +84,9 @@ with tf.Session() as sess:
 
             # save net
             net.save()
-            print('Saved snapshot of model')
+            print('Saved snapshot of model at iteration ' + str(net.global_step()))
 
-        if epoch % args.generate == 0:
-
+        if (epoch+1) % args.generate == 0:
             # make a song of length to test
             messages = np.zeros((SONG_LENGTH, msgs.shape[1]), dtype=np.int32)
             in_state = None
