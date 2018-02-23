@@ -8,15 +8,27 @@ import model
 import random
 from preprocess import postprocess
 import os
-
-# make directories for saving things
-if not os.path.exists('songs'):
-    os.makedirs('songs')
+import argparse
+from datetime import datetime
 
 data  = np.load('data/all.npz')
 msgs  = data['messages']
 maxes = data['maxes']
 names = data['names']
+
+# parse arguments
+parser = argparse.ArgumentParser(description='Train and generate music with the neural network described in model.py')
+parser.add_argument('--epochs', '-n', help='Number of times to train and then generate. Default 1000.', type=int, default=1000)
+parser.add_argument('--train', '-t', help='Set the number of batches for each epoch of training. Default 100.', type=int, default=100)
+parser.add_argument('--summarize', '-s', help='Summarize and save every s batches. Default 10.', type=int, default=10)
+parser.add_argument('--songlength', '-l', help='Length of song to generate. Default 100.', type=int, default=100)
+parser.add_argument('--songprefix', '-p', help='Prefix to prepend to saved song files. Default "songs/".', type=str, default='songs/')
+args = parser.parse_args()
+
+# make directories for saving songs
+songdir = os.path.dirname(args.songprefix)
+if not os.path.exists(songdir):
+    os.makedirs(songdir)
 
 def get_batch(data, time_steps, batch_size):
     batch = np.zeros((time_steps, batch_size, data.shape[1])) 
@@ -52,17 +64,17 @@ with tf.Session() as sess:
 
     TIME_STEPS = 101
     LOSS_TIME_STEPS = 100
-    NUM_EPOCHS = 1000
-    TRAIN_STEPS = 100
+    NUM_EPOCHS = args.epochs
+    TRAIN_STEPS = args.train
     BATCH_SIZE = 1000
-    SONG_LENGTH = 200
+    SONG_LENGTH = args.songlength
 
     for epoch in range(NUM_EPOCHS):
         for ti in range(TRAIN_STEPS):
             batch = get_batch(msgs, time_steps=TIME_STEPS, batch_size=BATCH_SIZE)
             net.train(batch, LOSS_TIME_STEPS)
 
-            if ti % 10 == 0:
+            if ti % args.summarize == 0:
                 summaries = net.summarize(batch, LOSS_TIME_STEPS)
 
         # save net
@@ -98,6 +110,6 @@ with tf.Session() as sess:
 
         # save the song
         midifile = postprocess(messages)
-        songfilename = 'songs/%s.mid'%(net.global_step())
+        songfilename = args.songprefix + str(net.global_step()) + '-' + str(datetime.now()).replace(' ','_').replace(':','-').replace('.','-') + '.mid'
         midifile.save(songfilename)
         print('Saved a new song at ' + songfilename)
