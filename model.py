@@ -98,12 +98,13 @@ class Net:
                 accuracy[i] = tf.reduce_mean(tf.cast(tf.equal(tf.argmax(self.output_slices[i], axis=-1), tf.argmax(self.label_slices[i], axis=-1)), tf.float32))
         
         # Make summary op and file
-        with tf.name_scope("summaries"):
+        with tf.name_scope('summary'):
             tf.summary.scalar('error', error)
             for i in range(DATA_ELEMENTS):
                 name = DATA_NAMES[i]
+                tf.summary.scalar(name + '_error', self.error_slices[i])
                 tf.summary.scalar(name + '_accuracy', accuracy[i])
-                tf.summary.histogram(name + '_labels', tf.argmax(self.label_slices[i], axis=-1))
+                tf.summary.histogram(name + '_label', tf.argmax(self.label_slices[i], axis=-1))
                 tf.summary.histogram(name + '_output', tf.argmax(self.output_slices[i], axis=-1))
 
             self.summaries = tf.summary.merge_all()
