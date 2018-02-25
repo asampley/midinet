@@ -51,7 +51,7 @@ if args.notemax:
     print('Note selection set to argmax')
     note_f = lambda probs, i: note_f_max(probs)
 elif args.noteedprob is not None:
-    print('Note selection set to exponential decay probability. Gamma = ' + str(agrs.noteedprob))
+    print('Note selection set to exponential decay probability. Gamma = ' + str(args.noteedprob))
     note_f = lambda probs, i: note_f_max(probs) if random.random() >= (args.noteedprob ** i) else note_f_prob(probs)
 elif args.noteeprob is not None:
     print('Note selection set to epsilon probability. Epsilon = ' + str(args.noteeprob))
