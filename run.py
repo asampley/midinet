@@ -121,8 +121,8 @@ with tf.Session() as sess:
                 messages[i,:] = out_msg
 
                 # print out as we generate the song
-                print("IN: " + str(in_msg))
-                print("OUT: " + str(out_msg))
+                #print("IN: " + str(in_msg))
+                #print("OUT: " + str(out_msg))
 
                 # take output as next input
                 in_state = out_state
