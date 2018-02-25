@@ -11,6 +11,8 @@ import os
 import argparse
 from datetime import datetime
 
+
+
 # parse arguments
 parser = argparse.ArgumentParser(description='Train and generate music with the neural network described in model.py')
 parser.add_argument('--data', '-d', help='Numpy file containing the training data. Default "data/all.npz"', type=str, default='data/all.npz')
@@ -20,6 +22,10 @@ parser.add_argument('--generate', '-g', help='Generate a song every g epochs. De
 parser.add_argument('--savedir', '-s', help='Directory in which to save the neural network model. Default "model/".', default='model/')
 parser.add_argument('--songlength', '-l', help='Length of song to generate. Default 100.', type=int, default=100)
 parser.add_argument('--songprefix', '-p', help='Prefix to prepend to saved song files. Default "songs/".', type=str, default='songs/')
+group = parser.add_mutually_exclusive_group()
+group.add_argument('--notemax', help='Select the note by taking the argmax of the neural network''s output', action='store_true')
+group.add_argument('--noteprob', help='Select the note by taking a random note with probabilities based on \
+        the neural network''s output. Default behavior', action='store_true')
 args = parser.parse_args()
 
 data  = np.load(args.data)
@@ -31,6 +37,16 @@ names = data['names']
 songdir = os.path.dirname(args.songprefix)
 if not os.path.exists(songdir):
     os.makedirs(songdir)
+
+# select note selection function
+# note_fun takes a list of arrays of probabilities
+if args.notemax:
+    print('Note selection set to argmax')
+    note_fun = lambda probs: [np.argmax(prob) for prob in probs]
+else:
+    print('Note selection set to softmax')
+    note_fun = lambda probs: [np.random.choice(len(prob), p=prob) for prob in probs]
+
 
 def get_batch(data, time_steps, batch_size):
     batch = np.zeros((time_steps, batch_size, data.shape[1])) 
@@ -90,8 +106,8 @@ with tf.Session() as sess:
             # make a song of length to test
             messages = np.zeros((SONG_LENGTH, msgs.shape[1]), dtype=np.int32)
             in_state = None
-            #in_msg = np.array([random.randint(0,m-1) for m in maxes], ndmin=3)
-            in_msg = np.array(np.concatenate(([0,5], maxes[2:])), ndmin=3) # middle C
+            in_msg = np.array([random.randint(0,m-1) for m in maxes], ndmin=3)
+            #in_msg = np.array(np.concatenate(([0,5], maxes[2:])), ndmin=3) # middle C
 
             for i in range(SONG_LENGTH):
                 # use network to get probabilities of each piece of message
@@ -99,15 +115,14 @@ with tf.Session() as sess:
 
                 # randomly select based on output values, which should sum to one
                 out_probs_squeezed = [np.squeeze(out_prob, axis=(0,1)) for out_prob in out_probs]
-                out_msg = np.array([np.random.choice(len(prob), p=prob) for prob in out_probs_squeezed], ndmin=3)
-                #out_msg = np.array([np.argmax(prob) for prob in out_probs_squeezed], ndmin=3)
+                out_msg = np.array(note_fun(out_probs_squeezed), ndmin=3)
 
                 # append to song
                 messages[i,:] = out_msg
 
                 # print out as we generate the song
-                #print("IN: " + str(in_msg))
-                #print("OUT: " + str(out_msg))
+                print("IN: " + str(in_msg))
+                print("OUT: " + str(out_msg))
 
                 # take output as next input
                 in_state = out_state
