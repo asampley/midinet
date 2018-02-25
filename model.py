@@ -6,12 +6,12 @@ class Net:
 
         initializer = tf.contrib.layers.xavier_initializer() # initializer for fc layers
 
-        RNN_SIZES     = params['RNN_SIZES']
-        LEARNING_RATE = params['LEARNING_RATE']
-        DATA_SIZES    = params['DATA_SIZES']
-        DATA_NAMES    = params['DATA_NAMES']
-        DATA_WEIGHTS  = params['DATA_WEIGHTS']
-        SAVE_DIR      = params['SAVE_DIR']
+        RNN_SIZES     = params['RNN_SIZES']     # list or tuple:            containing the output size of each rnn layer
+        LEARNING_RATE = params['LEARNING_RATE'] # float:                    learning rate for sgd
+        DATA_SIZES    = params['DATA_SIZES']    # list or tuple of ints:    number of possible values for each data element
+        DATA_NAMES    = params['DATA_NAMES']    # list or tuple of strings: name for each data element
+        DATA_WEIGHTS  = params['DATA_WEIGHTS']  # list or tuple of floats:  weight for each data element in total loss
+        SAVE_DIR      = params['SAVE_DIR']      # string:                   directory to save summaries and the neural network
 
         assert(len(DATA_SIZES) == len(DATA_NAMES) and len(DATA_NAMES) == len(DATA_WEIGHTS))
         DATA_ELEMENTS = len(DATA_SIZES)
