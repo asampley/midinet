@@ -26,6 +26,9 @@ group = parser.add_mutually_exclusive_group()
 group.add_argument('--notemax', help='Select the note by taking the argmax of the neural network''s output', action='store_true')
 group.add_argument('--noteprob', help='Select the note by taking a random note with probabilities based on \
         the neural network''s output. Default behavior', action='store_true')
+group.add_argument('--noteeprob', metavar=('epsilon'), help='Behaves like --noteprob with probability epsilon, and --notemax otherwise.', type=float)
+group.add_argument('--noteedprob', metavar=('gamma'), help='Behaves like --noteprob with probability e, where e starts at one, and is \
+        multiplied by gamma every note (exponential decay). Behaves like --notemax the rest of the time.', type=float)
 args = parser.parse_args()
 
 data  = np.load(args.data)
@@ -40,12 +43,22 @@ if not os.path.exists(songdir):
 
 # select note selection function
 # note_fun takes a list of arrays of probabilities
+def note_f_max(probs):
+    return [np.argmax(prob) for prob in probs]
+def note_f_prob(probs):
+    return [np.random.choice(len(prob), p=prob) for prob in probs]
 if args.notemax:
     print('Note selection set to argmax')
-    note_fun = lambda probs: [np.argmax(prob) for prob in probs]
+    note_f = lambda probs, i: note_f_max(probs)
+elif args.noteedprob is not None:
+    print('Note selection set to exponential decay probability. Gamma = ' + str(agrs.noteedprob))
+    note_f = lambda probs, i: note_f_max(probs) if random.random() >= (args.noteedprob ** i) else note_f_prob(probs)
+elif args.noteeprob is not None:
+    print('Note selection set to epsilon probability. Epsilon = ' + str(args.noteeprob))
+    note_f = lambda probs, i: note_f_max(probs) if random.random() >= args.noteeprob else note_f_prob(probs)
 else:
     print('Note selection set to softmax')
-    note_fun = lambda probs: [np.random.choice(len(prob), p=prob) for prob in probs]
+    note_f = lambda probs, i: note_f_prob(probs)
 
 
 def get_batch(data, time_steps, batch_size):
@@ -115,7 +128,7 @@ with tf.Session() as sess:
 
                 # randomly select based on output values, which should sum to one
                 out_probs_squeezed = [np.squeeze(out_prob, axis=(0,1)) for out_prob in out_probs]
-                out_msg = np.array(note_fun(out_probs_squeezed), ndmin=3)
+                out_msg = np.array(note_f(out_probs_squeezed, i), ndmin=3)
 
                 # append to song
                 messages[i,:] = out_msg
