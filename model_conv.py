@@ -7,7 +7,7 @@ class Net:
 
         initializer = tf.contrib.layers.xavier_initializer() # initializer for fc layers
 
-        RNN_SIZES     = params['RNN_SIZES']     # tuple:                    containing the output size of each rnn layer
+        RNN_SIZES     = tuple(params['RNN_SIZES']) # list or tuple:            containing the output size of each rnn layer
         LEARNING_RATE = params['LEARNING_RATE'] # float:                    learning rate for sgd
         DATA_SIZES    = params['DATA_SIZES']    # list or tuple of ints:    number of possible values for each data element
         DATA_NAMES    = params['DATA_NAMES']    # list or tuple of strings: name for each data element

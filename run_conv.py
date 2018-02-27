@@ -29,6 +29,7 @@ group.add_argument('--noteprob', help='Select the note by taking a random note w
 group.add_argument('--noteeprob', metavar=('epsilon'), help='Behaves like --noteprob with probability epsilon, and --notemax otherwise.', type=float)
 group.add_argument('--noteedprob', metavar=('gamma'), help='Behaves like --noteprob with probability e, where e starts at one, and is \
         multiplied by gamma every note (exponential decay). Behaves like --notemax the rest of the time.', type=float)
+parser.add_argument('--channels', nargs='+', help='Set the number of channels for each layer. Default is "4 8".', type=int, default=[4, 8])
 args = parser.parse_args()
 
 data  = np.load(args.data)
@@ -74,13 +75,14 @@ with tf.Session() as sess:
     ################################################################################
 
     params = {}
-    params['RNN_SIZES']     = (4,4,4)
+    params['RNN_SIZES']     = args.channels
     params['DATA_SIZES']    = maxes
     params['DATA_NAMES']    = names
     params['DATA_WEIGHTS']  = [1.0, 1.0, 1.0, 1.0]
     params['LEARNING_RATE'] = 1e-2
     params['SAVE_DIR']      = args.savedir
     params['CHANNEL_DIM']   = 2
+    params['KERNEL_SIZE']   = [3,3,3]
 
     net = model_conv.Net(sess, params)
 
