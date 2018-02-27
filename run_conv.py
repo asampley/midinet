@@ -14,7 +14,7 @@ from datetime import datetime
 
 
 # parse arguments
-parser = argparse.ArgumentParser(description='Train and generate music with the neural network described in model.py')
+parser = argparse.ArgumentParser(description='Train and generate music with the neural network described in model_conv.py')
 parser.add_argument('--data', '-d', help='Numpy file containing the training data. Default "data/all.npz"', type=str, default='data/all.npz')
 parser.add_argument('--epochs', '-n', help='Number of times to train and then generate. Default 1.', type=int, default=1)
 parser.add_argument('--train', '-t', help='Set the number of batches for each epoch of training. Default 0.', type=int, default=0)
@@ -74,15 +74,15 @@ with tf.Session() as sess:
     ################################################################################
 
     params = {}
-    params['RNN_SIZES']     = (16,)
+    params['RNN_SIZES']     = (4,4,4)
     params['DATA_SIZES']    = maxes
     params['DATA_NAMES']    = names
     params['DATA_WEIGHTS']  = [1.0, 1.0, 1.0, 1.0]
-    params['LEARNING_RATE'] = 1e-4
+    params['LEARNING_RATE'] = 1e-2
     params['SAVE_DIR']      = args.savedir
     params['CHANNEL_DIM']   = 2
 
-    net = model.Net(sess, params)
+    net = model_conv.Net(sess, params)
 
     # attempt to restore
     try:
