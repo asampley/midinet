@@ -1,4 +1,5 @@
 import tensorflow as tf
+import os
 
 class Net:
     def __init__(self, session, params):
@@ -124,10 +125,10 @@ class Net:
         return tf.nn.rnn_cell.MultiRNNCell(cells, state_is_tuple=True)
 
     def save(self):
-        self.saver.save(self.session, self.SAVE_DIR + '/model.ckpt')
+        self.saver.save(self.session, os.path.join(self.SAVE_DIR + 'model.ckpt'))
 
     def restore(self):
-        self.saver.restore(self.session, self.SAVE_DIR + '/model.ckpt')
+        self.saver.restore(self.session, os.path.join(self.SAVE_DIR, 'model.ckpt'))
     
     def train(self, messages, loss_time_steps, batch_state = None, keep_prob = 0.5):
         feed_dict = {

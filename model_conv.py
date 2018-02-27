@@ -1,4 +1,5 @@
 import tensorflow as tf
+import os
 
 class Net:
     def __init__(self, session, params):
@@ -13,6 +14,7 @@ class Net:
         DATA_WEIGHTS  = params['DATA_WEIGHTS']  # list or tuple of floats:  weight for each data element in total loss
         self.SAVE_DIR = params['SAVE_DIR']      # string:                   directory to save summaries and the neural network
         CHANNEL_DIM   = params['CHANNEL_DIM']   # int:                      dimension which is not included in the convolution kernel
+        KERNEL_SIZE   = params['KERNEL_SIZE']   # list:                     size of kernel for convolutions
 
         assert(len(DATA_SIZES) == len(DATA_NAMES) and len(DATA_NAMES) == len(DATA_WEIGHTS))
         DATA_ELEMENTS = len(DATA_SIZES)
@@ -68,7 +70,7 @@ class Net:
         # output size: (time, batch) + CONV_DIMS + (CHANNEL_DIM)
         with tf.name_scope("rnn") as scope:
             # create RNN cell
-            cell = Net.cell(CONV_NDIMS, self.input.shape[2:].as_list(), RNN_SIZES + (self.input.shape.as_list()[-1],), (3,3,3), self.keep_prob)
+            cell = Net.cell(CONV_NDIMS, self.input.shape[2:].as_list(), RNN_SIZES + (self.input.shape.as_list()[-1],), KERNEL_SIZE, self.keep_prob)
 
             # create trainable initial state
             with tf.name_scope("state"):
@@ -145,10 +147,10 @@ class Net:
         return tf.nn.rnn_cell.MultiRNNCell(cells, state_is_tuple=True)
 
     def save(self):
-        self.saver.save(self.session, self.SAVE_DIR + '/model.ckpt')
+        self.saver.save(self.session, os.path.join(self.SAVE_DIR, 'model.ckpt'))
 
     def restore(self):
-        self.saver.restore(self.session, self.SAVE_DIR + '/model.ckpt')
+        self.saver.restore(self.session, os.path.join(self.SAVE_DIR + 'model.ckpt'))
     
     def train(self, messages, loss_time_steps, batch_state = None, keep_prob = 0.5):
         feed_dict = {
