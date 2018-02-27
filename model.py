@@ -11,7 +11,7 @@ class Net:
         DATA_SIZES    = params['DATA_SIZES']    # list or tuple of ints:    number of possible values for each data element
         DATA_NAMES    = params['DATA_NAMES']    # list or tuple of strings: name for each data element
         DATA_WEIGHTS  = params['DATA_WEIGHTS']  # list or tuple of floats:  weight for each data element in total loss
-        SAVE_DIR      = params['SAVE_DIR']      # string:                   directory to save summaries and the neural network
+        self.SAVE_DIR = params['SAVE_DIR']      # string:                   directory to save summaries and the neural network
 
         assert(len(DATA_SIZES) == len(DATA_NAMES) and len(DATA_NAMES) == len(DATA_WEIGHTS))
         DATA_ELEMENTS = len(DATA_SIZES)
@@ -109,7 +109,7 @@ class Net:
                 tf.summary.histogram(name + '_output', tf.argmax(self.output_slices[i], axis=-1))
 
             self.summaries = tf.summary.merge_all()
-            self.summaryFileWriter = tf.summary.FileWriter(SAVE_DIR, self.session.graph)
+            self.summaryFileWriter = tf.summary.FileWriter(self.SAVE_DIR, self.session.graph)
 
         # Make net saver
         self.saver = tf.train.Saver()
@@ -124,10 +124,10 @@ class Net:
         return tf.nn.rnn_cell.MultiRNNCell(cells, state_is_tuple=True)
 
     def save(self):
-        self.saver.save(self.session, 'model/model.ckpt')
+        self.saver.save(self.session, self.SAVE_DIR + '/model.ckpt')
 
     def restore(self):
-        self.saver.restore(self.session, 'model/model.ckpt')
+        self.saver.restore(self.session, self.SAVE_DIR + '/model.ckpt')
     
     def train(self, messages, loss_time_steps, batch_state = None, keep_prob = 0.5):
         feed_dict = {
