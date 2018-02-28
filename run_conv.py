@@ -84,6 +84,11 @@ with tf.Session() as sess:
     params['CHANNEL_DIM']   = 2
     params['KERNEL_SIZE']   = [3,3,3]
 
+    # print information about the neural network
+    print('Neural network parameters')
+    for k,v in params.items():
+        print(str(k) + ': ' + str(v))
+
     net = model_conv.Net(sess, params)
 
     # attempt to restore
