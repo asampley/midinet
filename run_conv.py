@@ -19,9 +19,9 @@ parser.add_argument('--data', '-d', help='Numpy file containing the training dat
 parser.add_argument('--epochs', '-n', help='Number of times to train and then generate. Default 1.', type=int, default=1)
 parser.add_argument('--train', '-t', help='Set the number of batches for each epoch of training. Default 0.', type=int, default=0)
 parser.add_argument('--generate', '-g', help='Generate a song every g epochs. Default 1.', type=int, default=1)
-parser.add_argument('--savedir', '-s', help='Directory in which to save the neural network model. Default "model/".', default='model/')
+parser.add_argument('--savedir', '-s', help='Directory in which to save the neural network model. Default "model_conv/".', default='model_conv/')
 parser.add_argument('--songlength', '-l', help='Length of song to generate. Default 100.', type=int, default=100)
-parser.add_argument('--songprefix', '-p', help='Prefix to prepend to saved song files. Default "songs/".', type=str, default='songs/')
+parser.add_argument('--songprefix', '-p', help='Prefix to prepend to saved song files. Default "songs_conv/".', type=str, default='songs_conv/')
 group = parser.add_mutually_exclusive_group()
 group.add_argument('--notemax', help='Select the note by taking the argmax of the neural network''s output', action='store_true')
 group.add_argument('--noteprob', help='Select the note by taking a random note with probabilities based on \
@@ -127,7 +127,8 @@ with tf.Session() as sess:
             # make a song of length to test
             messages = np.zeros((SONG_LENGTH, msgs.shape[1]), dtype=np.int32)
             in_state = None
-            in_msg = np.array([random.randint(0,m-1) for m in maxes], ndmin=3)
+            in_msg = get_batch(msgs, time_steps=TIME_STEPS, batch_size=1)
+            #in_msg = np.array([random.randint(0,m-1) for m in maxes], ndmin=3)
             #in_msg = np.array(np.concatenate(([0,5], maxes[2:])), ndmin=3) # middle C
 
             for i in range(SONG_LENGTH):

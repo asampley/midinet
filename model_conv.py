@@ -172,7 +172,7 @@ class Net:
         
         feed_dict = {
             self.messages: messages,
-            self.loss_time_steps: 2,
+            self.loss_time_steps: 1,
             self.keep_prob: 1.0
         }
         if batch_state is not None:

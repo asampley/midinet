@@ -119,7 +119,8 @@ with tf.Session() as sess:
             # make a song of length to test
             messages = np.zeros((SONG_LENGTH, msgs.shape[1]), dtype=np.int32)
             in_state = None
-            in_msg = np.array([random.randint(0,m-1) for m in maxes], ndmin=3)
+            in_msg = get_batch(msgs, time_steps=TIME_STEPS, batch_size=1)
+            #in_msg = np.array([random.randint(0,m-1) for m in maxes], ndmin=3)
             #in_msg = np.array(np.concatenate(([0,5], maxes[2:])), ndmin=3) # middle C
 
             for i in range(SONG_LENGTH):
