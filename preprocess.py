@@ -13,40 +13,41 @@ if __name__ == '__main__':
     parser.add_argument('--durations', '-d', help='Number of different durations to save', type=int, default=8)
     args = parser.parse_args()
 
-def preprocess(f, volumes=1, duration_categories=8):
-    return m2d.midi2data(f, volumes=volumes, duration_categories=duration_categories)
-
-def postprocess(messages, volumes=1, duration_categories=8):
-    # trim invalid midi notes
-    messages = messages[np.logical_or(messages[:,0] < 8, messages[:,1] != 10),:]
-    return m2d.data2midi(messages, volumes=volumes, duration_categories=duration_categories)
-
-if __name__ == '__main__':
-    # hold each output in a list
-    message_arrays = []
+def preprocess(files, volumes=1, duration_categories=8, pad_duration=0):
 
     # create padding between songs
-    pad_durations = m2d.ticks2durations(args.waittime, args.durations)
+    pad_durations = m2d.ticks2durations(pad_duration, duration_categories)
     pad = np.zeros((len(pad_durations), 4), dtype=np.int8)
     pad[:,3] = pad_durations
-        
+    
     # go through each file and add them to the list with pads in between
-    for f in args.files:
-        messages_f = preprocess(f, volumes=args.volumes, duration_categories=args.durations)
+    message_arrays = []
+
+    for f in files:
+        messages_f = m2d.midi2data(f, volumes=volumes, duration_categories=duration_categories)
         message_arrays += [messages_f, pad]
 
-    # concatenate all arrays into numpy array
+    # turn list into unique messages, and indices, s.t. messages[indices] gives the original song
     messages = np.concatenate(message_arrays, axis=0)
+    messages, indices = np.unique(messages, return_inverse=True, axis=0)
+
+    return messages, indices
+
+def postprocess(messages, indices, volumes=1, duration_categories=8):
+    return m2d.data2midi(messages[indices], volumes=volumes, duration_categories=duration_categories)
+
+if __name__ == '__main__':
+
+    # preprocess
+    messages, indices = preprocess(args.files, volumes=args.volumes, duration_categories=args.durations, pad_duration=args.waittime)
 
     print("Created data with")
     print("\t%s songs"%(len(args.files)))
-    print("\t%s timesteps"%(messages.shape[0]))
-    print("\t%s 32nd notes"%(np.sum(messages[:,3])))
+    print("\t%s unique messages"%(messages.shape[0]))
+    print("\t%s timesteps"%(indices.shape[0]))
 
     if args.midi:
-        mfile = postprocess(messages)
+        mfile = postprocess(messages, indices, volumes=args.volumes, duration_categories=args.durations)
         mfile.save(args.outputfile)
     else:
-        maxes = (m2d._PITCHES, m2d._OCTAVES, args.volumes, args.durations)
-        names = ('pitch', 'octave', 'volume', 'duration')
-        np.savez(args.outputfile, messages=messages, maxes=maxes, names=names)
+        np.savez(args.outputfile, messages=messages, indices=indices)
