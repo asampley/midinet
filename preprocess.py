@@ -40,6 +40,8 @@ if __name__ == '__main__':
 
     # preprocess
     messages, indices = preprocess(args.files, volumes=args.volumes, duration_categories=args.durations, pad_duration=args.waittime)
+    names = ['pitch', 'octave', 'volume', 'duration']
+    maxes = [m2d._PITCHES, m2d._OCTAVES, args.volumes, args.durations]
 
     print("Created data with")
     print("\t%s songs"%(len(args.files)))
@@ -50,4 +52,4 @@ if __name__ == '__main__':
         mfile = postprocess(messages, indices, volumes=args.volumes, duration_categories=args.durations)
         mfile.save(args.outputfile)
     else:
-        np.savez(args.outputfile, messages=messages, indices=indices)
+        np.savez(args.outputfile, messages=messages, indices=indices, names=names, maxes=maxes)
