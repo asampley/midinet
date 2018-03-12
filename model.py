@@ -7,107 +7,86 @@ class Net:
 
         initializer = tf.contrib.layers.xavier_initializer() # initializer for fc layers
 
-        RNN_SIZES     = params['RNN_SIZES']     # list or tuple:            containing the output size of each rnn layer
-        LEARNING_RATE = params['LEARNING_RATE'] # float:                    learning rate for sgd
-        DATA_SIZES    = params['DATA_SIZES']    # list or tuple of ints:    number of possible values for each data element
-        DATA_NAMES    = params['DATA_NAMES']    # list or tuple of strings: name for each data element
-        DATA_WEIGHTS  = params['DATA_WEIGHTS']  # list or tuple of floats:  weight for each data element in total loss
-        self.SAVE_DIR = params['SAVE_DIR']      # string:                   directory to save summaries and the neural network
+        RNN_SIZES     = params['RNN_SIZES']     # list or tuple: containing the output size of each rnn layer
+        DENSE_SIZES   = params['DENSE_SIZES']   # list or tuple: containing the output size of each dense layer
+        LEARNING_RATE = params['LEARNING_RATE'] # float:         learning rate for sgd
+        CATEGORIES    = params['CATEGORIES']    # int:           number of unique notes in the data
+        self.SAVE_DIR = params['SAVE_DIR']      # string:        directory to save summaries and the neural network
 
-        assert(len(DATA_SIZES) == len(DATA_NAMES) and len(DATA_NAMES) == len(DATA_WEIGHTS))
-        DATA_ELEMENTS = len(DATA_SIZES)
-
-        self.messages = tf.placeholder(tf.int32, (None, None, DATA_ELEMENTS), 'messages') # (time, batch, message)
-        self.weights = tf.constant(DATA_WEIGHTS, name='weights')
+        # data, both input and labels
+        self.indices = tf.placeholder(tf.int32, (None, None), 'message_indices') # (time, batch)
+        self.one_hots = tf.one_hot(self.indices, CATEGORIES, dtype=tf.float32, name='one_hots') # (time, batch, one_hot)
+        # boolean scalar, for whether to trim off the last datum. Should be true for training, false for prediction
+        self.trim_last = tf.placeholder(tf.bool, (), 'trim_last') # scalar
+        # Set variable for dropout of each layer
+        self.keep_prob = tf.placeholder(tf.float32, (), name='keep_prob') # scalar
         
-        with tf.name_scope("one_hot_stitch"):
-            # slice and create one_hot vectors for each variable (pitch, octave, volume, duration)
-            one_hots = []
-            for i in range(DATA_ELEMENTS):
-                ds = DATA_SIZES[i]
-                name = DATA_NAMES[i] + '_one_hot'
-                one_hots += [tf.one_hot(self.messages[:,:,i], ds, name=name)]
-
         # cut off last note as input, since we have no corresponding output
-        # in the case of a single input, don't cut, because we're doing prediction (training makes no sense without an output)
-        # TODO: make this more elegant
+        # only does this if self.trim_last is true
         with tf.name_scope("trim_inputs"):
             # join each one_hot vector into a longer vector of size (time, batch, pitch + octave + volume + duration)
-            self.input = tf.concat(one_hots, -1)
-            self.input = tf.cond(tf.shape(self.input)[0] > 1, lambda: self.input[:-1, ...], lambda: self.input)
+            self.input = tf.cond(self.trim_last, lambda: self.one_hots[:-1, ...], lambda: self.one_hots)
         
         # variable to specify how many time steps to use for training each iteration
         self.loss_time_steps = tf.placeholder(tf.int32, name='loss_time_steps')
 
-        # slice off training outputs
+        # slice off labels
         with tf.name_scope("trim_labels"):
-            self.label_slices = [None] * DATA_ELEMENTS
-            for i in range(DATA_ELEMENTS):
-                self.label_slices[i] = one_hots[i][-self.loss_time_steps:, ...]
+            self.labels = self.one_hots[-self.loss_time_steps:, ...]
 
         # global step counter
         self._global_step = tf.Variable(0, name='global_step', trainable=False)
 
-        # Set variable for dropout of each layer
-        self.keep_prob = tf.placeholder(tf.float32, name='keep_prob')
-
-        # Create variables for a couple of useful values
-        with tf.name_scope("time_steps"):
-            self.times_in   = tf.shape(self.messages)[0]
+        # Create useful variables
         with tf.name_scope("batch_size"):
-            self.batch_size = tf.shape(self.messages)[1]
+            self.batch_size = tf.shape(self.indices)[1]
 
-        # create RNNs for each layer, followed by a final one that produces a one_hot the same size as the stitched input
-        # input size:  (time, batch, pitch + octave + volume + duration)
-        # output size: (time, batch, pitch + octave + volume + duration)
+        # create RNNs for each layer
+        # input size:  (time, batch, categories)
+        # output size: (time, batch, RNN_SIZES[-1])
         with tf.name_scope("rnn") as scope:
             # create RNN cell, which is multiple lstm cells
-            cell = Net.cell(RNN_SIZES + [sum(DATA_SIZES)], self.keep_prob)
+            cell = Net.cell(RNN_SIZES, self.keep_prob)
             # create trainable initial state
             with tf.name_scope("state"):
                 states = Net.get_state_variables(self.batch_size, cell)
             # create the whole RNN
             rnn_output, self.rnn_state = tf.nn.dynamic_rnn(cell, self.input, initial_state=states, time_major=True, scope=scope)
-        
+ 
         # output only enough time steps for loss
         with tf.name_scope("output_loss_time_steps"):
             rnn_output = rnn_output[-self.loss_time_steps:, ...]
 
-        # slice and do softmax for each one_hot vector
-        with tf.name_scope("output_softmax"):
-            splits = tf.split(rnn_output, DATA_SIZES, 2)
-            self.output_slices = [None] * DATA_ELEMENTS
-            for i in range(DATA_ELEMENTS):
-                name = DATA_NAMES[i] + '_softmax'
-                self.output_slices[i] = tf.nn.softmax(splits[i], -1, name=name)
+        # create dense layers, followed by a final one that produces the correct number of categories
+        with tf.variable_scope("dense"):
+            in_tensor = rnn_output
+            for i in range(len(DENSE_SIZES)):
+                with tf.variable_scope("layer_" + str(i)):
+                    in_tensor = tf.layers.dense(in_tensor, DENSE_SIZES[i], activation=tf.nn.relu)
+            with tf.variable_scope("layer_" + str(len(DENSE_SIZES))):
+                self.output_raw = tf.layers.dense(in_tensor, CATEGORIES, activation=tf.nn.relu)
+
+        # do softmax
+        with tf.name_scope("softmax"):
+            self.output = tf.nn.softmax(self.output_raw)
 
         # compute cross entropy
         with tf.name_scope("error"):
-            self.error_slices = [None] * DATA_ELEMENTS
-            for i in range(DATA_ELEMENTS):
-                name = DATA_NAMES[i] + '_error'
-                with tf.name_scope(name):
-                    self.error_slices[i] = tf.reduce_mean(-tf.reduce_sum(tf.multiply(self.label_slices[i], tf.log(self.output_slices[i])), axis=2))
-            error = tf.reduce_sum(self.weights * tf.stack(self.error_slices, 0))
+            self.error = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=self.labels, logits=self.output_raw, name='error'))
 
         # optimize
-        self.train_fn = tf.train.AdamOptimizer(learning_rate=LEARNING_RATE).minimize(error, global_step=self._global_step)
+        self.train_fn = tf.train.AdamOptimizer(learning_rate=LEARNING_RATE).minimize(self.error, global_step=self._global_step)
 
         # compute accuracies as fraction of outputs where the value with the maximal value is considered the chosen one
         with tf.name_scope("accuracy"):
-            accuracy = [None] * DATA_ELEMENTS
-            for i in range(DATA_ELEMENTS):
-                accuracy[i] = tf.reduce_mean(tf.cast(tf.equal(tf.argmax(self.output_slices[i], axis=-1), tf.argmax(self.label_slices[i], axis=-1)), tf.float32))
+            self.accuracy = tf.reduce_mean(tf.cast(tf.equal(tf.argmax(self.output, axis=-1), tf.argmax(self.labels, axis=-1)), tf.float32))
         
         # Make summary op and file
         with tf.name_scope('summary'):
-            tf.summary.scalar('error', error)
-            for i in range(DATA_ELEMENTS):
-                name = DATA_NAMES[i]
-                tf.summary.scalar(name + '_error', self.error_slices[i])
-                tf.summary.scalar(name + '_accuracy', accuracy[i])
-                tf.summary.histogram(name + '_label', tf.argmax(self.label_slices[i], axis=-1))
-                tf.summary.histogram(name + '_output', tf.argmax(self.output_slices[i], axis=-1))
+            tf.summary.scalar('error', self.error)
+            tf.summary.scalar('accuracy', self.accuracy)
+            tf.summary.histogram('label', tf.argmax(self.labels, axis=-1))
+            tf.summary.histogram('output', tf.argmax(self.output, axis=-1))
 
             self.summaries = tf.summary.merge_all()
             self.summaryFileWriter = tf.summary.FileWriter(self.SAVE_DIR, self.session.graph)
@@ -130,11 +109,12 @@ class Net:
     def restore(self):
         self.saver.restore(self.session, os.path.join(self.SAVE_DIR, 'model.ckpt'))
     
-    def train(self, messages, loss_time_steps, batch_state = None, keep_prob = 0.5):
+    def train(self, indices, loss_time_steps, batch_state = None, keep_prob = 0.5):
         feed_dict = {
-            self.messages: messages,
+            self.indices: indices,
             self.loss_time_steps: loss_time_steps,
-            self.keep_prob: keep_prob
+            self.keep_prob: keep_prob,
+            self.trim_last: True
         }
         if batch_state is not None:
             feed_dict[self.rnn_state] = batch_state
@@ -143,28 +123,30 @@ class Net:
             [self.train_fn, self.rnn_state],
             feed_dict=feed_dict)
 
-    def predict(self, messages, batch_state = None):
+    def predict(self, indices, batch_state = None):
         """
         Returns the outputs and new state of the lstm
         """
         
         feed_dict = {
-            self.messages: messages,
+            self.indices: indices,
             self.loss_time_steps: 1,
-            self.keep_prob: 1.0
+            self.keep_prob: 1.0,
+            self.trim_last: False
         }
         if batch_state is not None:
             feed_dict[self.rnn_state] = batch_state
 
         return self.session.run(
-            [self.output_slices, self.rnn_state],
+            [self.output, self.rnn_state],
             feed_dict=feed_dict)
 
-    def summarize(self, messages, loss_time_steps, batch_state = None):
+    def summarize(self, indices, loss_time_steps, batch_state = None):
         feed_dict = {
-            self.messages: messages,
+            self.indices: indices,
             self.loss_time_steps: loss_time_steps,
-            self.keep_prob: 1.0
+            self.keep_prob: 1.0,
+            self.trim_last: True
         }
         if batch_state is not None:
             feed_dict[self.states] = batch_state
