@@ -75,10 +75,10 @@ with tf.Session() as sess:
     ################################################################################
 
     params = {}
-    params['RNN_SIZES']     = [512, 512]
-    params['DENSE_SIZES']   = [512, 512]
+    params['RNN_SIZES']     = [256, 512, 256]
+    params['DENSE_SIZES']   = [256]
     params['CATEGORIES']    = msgs.shape[0]
-    params['LEARNING_RATE'] = 1e-4
+    params['LEARNING_RATE'] = 1e-2
     params['SAVE_DIR']      = args.savedir
 
     net = model.Net(sess, params)
@@ -94,11 +94,11 @@ with tf.Session() as sess:
     ##                           TRAINING LOOP                                    ##
     ################################################################################
 
-    TIME_STEPS = 101
-    LOSS_TIME_STEPS = 100
+    TIME_STEPS = 50
+    LOSS_TIME_STEPS = 49
     NUM_EPOCHS = args.epochs
     TRAIN_STEPS = args.train
-    BATCH_SIZE = 1000
+    BATCH_SIZE = 100
     SONG_LENGTH = args.songlength
 
     for epoch in range(NUM_EPOCHS):
