@@ -22,6 +22,8 @@ parser.add_argument('--generate', '-g', help='Generate a song every g epochs. De
 parser.add_argument('--savedir', '-s', help='Directory in which to save the neural network model. Default "model/".', default='model/')
 parser.add_argument('--songlength', '-l', help='Length of song to generate. Default 100.', type=int, default=100)
 parser.add_argument('--songprefix', '-p', help='Prefix to prepend to saved song files. Default "songs/".', type=str, default='songs/')
+parser.add_argument('--rnns', help='Sizes of RNN layers. Default 256 512 256.', type=int, nargs='+', default=[256, 512, 256])
+parser.add_argument('--denses', help='Sizes of Dense layers. Default 256.', type=int, nargs='+', default=[256])
 group = parser.add_mutually_exclusive_group()
 group.add_argument('--notemax', help='Select the note by taking the argmax of the neural network''s output', action='store_true')
 group.add_argument('--noteprob', help='Select the note by taking a random note with probabilities based on \
@@ -75,12 +77,16 @@ with tf.Session() as sess:
     ################################################################################
 
     params = {}
-    params['RNN_SIZES']     = [256, 512, 256]
-    params['DENSE_SIZES']   = [256]
+    params['RNN_SIZES']     = args.rnns
+    params['DENSE_SIZES']   = args.denses
     params['CATEGORIES']    = msgs.shape[0]
     params['LEARNING_RATE'] = 1e-2
     params['SAVE_DIR']      = args.savedir
-
+    
+    # print information about the neural network
+    print('Neural network parameters')
+    for k,v in params.items():
+        print(str(k) + ': ' + str(v))
     net = model.Net(sess, params)
 
     # attempt to restore
